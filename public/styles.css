@@ -42,6 +42,34 @@ body.inspector-open .emulator { margin-right: min(440px, 36vw); }
 .brand strong { font-size: 15px; letter-spacing: 0; white-space: nowrap; }
 .brand small, .runtime-status { font: 10px/1.35 "SF Mono", "Noto Sans Mono CJK SC", monospace; }
 .brand small { color: var(--muted); letter-spacing: 0; }
+.github-repo {
+  min-height: 34px;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 7px 10px;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  color: var(--muted);
+  background: rgba(255, 255, 255, .025);
+  font: 600 10px/1 "SF Mono", "Noto Sans Mono CJK SC", monospace;
+  text-decoration: none;
+  white-space: nowrap;
+  transition: border-color .15s ease, color .15s ease, background .15s ease;
+}
+.github-repo svg {
+  width: 16px;
+  height: 16px;
+  flex: 0 0 auto;
+}
+.github-repo:hover,
+.github-repo:focus-visible {
+  border-color: var(--mint);
+  color: var(--mint);
+  background: rgba(67, 238, 160, .07);
+  outline: none;
+}
+.github-repo:active { background: rgba(67, 238, 160, .14); }
 .runtime-status {
   display: flex;
   align-items: center;
@@ -1097,6 +1125,16 @@ body.inspector-open .emulator { margin-right: min(440px, 36vw); }
   body.inspector-open .emulator { margin-right: 0; }
 }
 @media (max-width: 900px) {
+  .toolbar {
+    display: grid;
+    grid-template-columns: auto auto minmax(0, 1fr);
+    gap: 8px 12px;
+  }
+  .runtime-status { margin-left: auto; }
+  .toolbar-actions {
+    grid-column: 1 / -1;
+    justify-content: flex-end;
+  }
   .workspace {
     display: block;
   }
@@ -1175,6 +1213,12 @@ body.inspector-open .emulator { margin-right: min(440px, 36vw); }
 @media (max-width: 420px) {
   .toolbar { padding-inline: 12px; }
   .brand small { display: none; }
+  .github-repo {
+    width: 34px;
+    justify-content: center;
+    padding-inline: 0;
+  }
+  .github-repo span { display: none; }
   .inspector-toggle,
   .upload,
   .restart { min-height: 32px; padding: 7px 8px; }
