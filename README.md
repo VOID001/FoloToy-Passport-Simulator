@@ -2,7 +2,7 @@
 
 [![FoloToy AI Passport 模拟器演示](./public/assets/demo/folotoy-emu.gif)](./public/assets/demo/folotoy-emu.mp4)
 
-> 点击演示可观看有声版本。
+> 点击可观看视频！
 
 在浏览器中运行 FoloToy AI Passport 的 ESP32-C3 固件。项目基于
 ESP-EMU v0.42.0、WebAssembly 和 QEMU，直接模拟开发板外设，普通固件无需为浏览器单独适配。
