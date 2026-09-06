@@ -1,0 +1,18 @@
+{
+  "name": "ai-passport-emulator",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Browser shell and WASM runtime host for AI Passport QEMU",
+  "scripts": {
+    "build": "npm run prepare:emulator && node tools/build-site.mjs",
+    "prepare:emulator": "node tools/verify-board-runtime.mjs",
+    "start": "node server.mjs",
+    "start:dist": "node dist/server.mjs",
+    "verify:release": "node tools/verify-site.mjs",
+    "test": "node --test"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

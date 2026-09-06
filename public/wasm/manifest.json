@@ -1,0 +1,6 @@
+{
+  "worker": "/wasm/qemu-worker.js",
+  "firmware": "/assets/firmware/folotoy-demo.bin",
+  "board": "folotoy-ai-passport-v1",
+  "runtime": "esp-emu-0.42.0-board-abi-1"
+}

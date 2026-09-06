@@ -1,0 +1,10 @@
+.build
+.dbg
+.git
+artifacts
+dist
+firmware
+patches
+test
+*.bin
+!public/assets/firmware/*.bin

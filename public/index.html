@@ -1,0 +1,345 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="theme-color" content="#0a0d10">
+    <title>FoloToy Passport Simulator</title>
+    <link rel="stylesheet" href="/styles.css">
+    <script type="module" src="/app.js"></script>
+  </head>
+  <body>
+    <main class="emulator">
+      <header class="toolbar">
+        <a class="brand" href="/" aria-label="FoloToy Passport Simulator home">
+          <span>
+            <strong>FoloToy Passport Simulator</strong>
+            <small>Powered by WebAssembly &amp; QEMU</small>
+          </span>
+        </a>
+        <div class="runtime-status" aria-live="polite">
+          <span id="runtime-light" class="status-light"></span>
+          <span id="runtime-state">等待运行时</span>
+        </div>
+        <div class="toolbar-actions">
+          <button id="audio-enable" class="audio-control" type="button"
+                  aria-pressed="false" title="启用扬声器输出">声音</button>
+          <button id="microphone-toggle" class="audio-control" type="button"
+                  aria-pressed="false" title="授权麦克风输入">授权 MIC</button>
+          <button id="inspector-toggle" class="inspector-toggle" type="button"
+                  aria-controls="debug-panel" aria-expanded="false"
+                  aria-label="打开 Debug 检查器" title="Debug 检查器">
+            <span aria-hidden="true">0x</span>
+          </button>
+          <button id="firmware-upload" class="upload" type="button">
+            <span class="upload-icon" aria-hidden="true">↑</span>
+            <span class="upload-label">上传固件</span>
+          </button>
+          <input id="firmware-file" class="visually-hidden" type="file"
+                 accept=".bin,application/octet-stream" tabindex="-1"
+                 aria-label="选择固件文件">
+          <button id="restart-runtime" class="restart" type="button">硬重启</button>
+        </div>
+      </header>
+
+      <div class="workspace">
+        <aside class="try-panel" aria-labelledby="try-panel-title">
+          <header class="try-panel-header">
+            <small>FIRMWARE LIBRARY</small>
+            <h2 id="try-panel-title">尝试一下</h2>
+          </header>
+          <div class="firmware-presets">
+            <button class="firmware-preset" type="button"
+                    data-firmware-id="music-keychain"
+                    data-firmware-name="音乐钥匙扣"
+                    data-firmware-url="/assets/firmware/music-keychain.bin"
+                    aria-pressed="false">
+              <span class="preset-index" aria-hidden="true">01</span>
+              <span class="preset-copy">
+                <strong>音乐钥匙扣</strong>
+                <small>语音互动 · 8.00 MB</small>
+              </span>
+              <span class="preset-state">运行</span>
+            </button>
+            <button class="firmware-preset" type="button"
+                    data-firmware-id="answer-book"
+                    data-firmware-name="答案之书"
+                    data-firmware-url="/assets/firmware/answer-book.bin"
+                    aria-pressed="false">
+              <span class="preset-index" aria-hidden="true">02</span>
+              <span class="preset-copy">
+                <strong>答案之书</strong>
+                <small>随机回答 · 2.76 MB</small>
+              </span>
+              <span class="preset-state">运行</span>
+            </button>
+            <button class="firmware-preset is-active" type="button"
+                    data-firmware-id="official-demo"
+                    data-firmware-name="FoloToy 官方 Demo"
+                    data-firmware-url="/assets/firmware/folotoy-demo.bin"
+                    aria-pressed="true">
+              <span class="preset-index" aria-hidden="true">03</span>
+              <span class="preset-copy">
+                <strong>FoloToy 官方 Demo</strong>
+                <small>当前默认 · 1.51 MB</small>
+              </span>
+              <span class="preset-state">当前</span>
+            </button>
+          </div>
+          <p id="preset-feedback" class="preset-feedback" aria-live="polite">
+            选择镜像后将自动刷写并运行
+          </p>
+        </aside>
+
+        <section class="stage" aria-label="FoloToy Passport virtual device">
+          <div class="passport-shell">
+            <img class="shell-art" src="/assets/ai-passport-shell-reference.png" alt="">
+            <div class="screen-bezel">
+              <canvas id="qemu-display" width="240" height="320" aria-label="QEMU firmware display"></canvas>
+              <div id="screen-overlay" class="screen-overlay">
+                <span class="loading-dot"></span>
+                <strong>QEMU WASM</strong>
+                <small>等待运行时镜像</small>
+              </div>
+            </div>
+
+            <div class="hardware-controls" aria-label="FoloToy Passport hardware controls">
+              <button class="hardware-key key-up" data-key="UP" type="button" aria-label="UP, click or double click">
+                <span>UP</span>
+              </button>
+              <button class="hardware-key key-down" data-key="DOWN" type="button" aria-label="DOWN, click or double click">
+                <span>DOWN</span>
+              </button>
+              <button class="hardware-key key-ok" data-key="OK" type="button" aria-label="OK, click or double click">
+                <span>OK</span>
+              </button>
+              <button class="hardware-key key-power" data-key="POWER" type="button" aria-label="POWER, click or double click">
+                <span>POWER</span>
+              </button>
+            </div>
+          </div>
+        </section>
+      </div>
+
+      <ol id="event-log" class="visually-hidden" aria-live="polite"
+          aria-label="Input event log"></ol>
+    </main>
+
+    <aside id="debug-panel" class="debug-panel" aria-hidden="true" aria-label="运行时检查器" inert>
+      <header class="debug-header">
+        <div>
+          <strong>运行时检查器</strong>
+          <small id="debug-source">内置固件</small>
+        </div>
+        <button id="inspector-close" class="icon-button" type="button" aria-label="关闭检查器" title="关闭">×</button>
+      </header>
+
+      <nav class="debug-tabs" aria-label="检查器视图">
+        <button class="debug-tab is-active" data-debug-tab="cpu" type="button" aria-selected="true">CPU</button>
+        <button class="debug-tab" data-debug-tab="uart" type="button" aria-selected="false">UART</button>
+        <button class="debug-tab" data-debug-tab="network" type="button" aria-selected="false">Wi-Fi</button>
+      </nav>
+
+      <section class="debug-view is-active" data-debug-view="cpu" aria-label="CPU state">
+        <div class="cpu-summary">
+          <div>
+            <span>PC</span>
+            <strong id="debug-pc">0x00000000</strong>
+          </div>
+          <div>
+            <span>Cycles</span>
+            <strong id="debug-cycles">0</strong>
+          </div>
+          <div>
+            <span>SP</span>
+            <strong id="debug-sp">0x00000000</strong>
+          </div>
+        </div>
+        <div class="section-heading">
+          <strong>RISC-V Registers</strong>
+          <span id="debug-sample-state">等待采样</span>
+        </div>
+        <div id="register-grid" class="register-grid"></div>
+      </section>
+
+      <section class="debug-view uart-view" data-debug-view="uart" aria-label="UART console" hidden>
+        <div class="uart-toolbar">
+          <div class="uart-state" aria-live="polite">
+            <span id="uart-state-light" class="uart-state-light"></span>
+            <strong id="uart-state">LIVE</strong>
+            <span id="uart-stats">0 lines · 0 B</span>
+          </div>
+          <div class="uart-actions">
+            <label class="uart-autoscroll">
+              <input id="uart-autoscroll" type="checkbox" checked>
+              <span>自动滚动</span>
+            </label>
+            <button id="uart-pause" class="icon-button uart-icon-button" type="button"
+                    aria-pressed="false" aria-label="暂停 UART 输出" title="暂停">Ⅱ</button>
+            <button id="uart-clear" class="uart-clear" type="button">清空</button>
+          </div>
+        </div>
+        <div class="uart-terminal">
+          <pre id="uart-output" tabindex="0" role="log" aria-label="UART 输出"></pre>
+          <div id="uart-empty" class="uart-empty">
+            <strong>等待 UART 输出</strong>
+            <span>固件日志将在这里显示</span>
+          </div>
+        </div>
+        <form id="uart-input-form" class="uart-input-form">
+          <span aria-hidden="true">&gt;</span>
+          <input id="uart-input" type="text" autocomplete="off" spellcheck="false"
+                 aria-label="UART 输入" placeholder="输入命令">
+          <button type="submit">发送</button>
+        </form>
+      </section>
+
+      <section class="debug-view network-view" data-debug-view="network"
+               aria-label="Network bridge state" hidden>
+        <div class="network-summary">
+          <div class="network-state-row">
+            <span id="network-state-light" class="network-state-light"></span>
+            <div>
+              <span>BRIDGE</span>
+              <strong id="network-state">CONNECTING</strong>
+            </div>
+          </div>
+          <dl class="network-properties">
+            <div>
+              <dt>Access point</dt>
+              <dd>Emulator Host Bridge</dd>
+            </div>
+            <div>
+              <dt>Security</dt>
+              <dd>Open</dd>
+            </div>
+            <div>
+              <dt>Gateway</dt>
+              <dd id="network-gateway">192.168.4.1</dd>
+            </div>
+            <div>
+              <dt>Guest lease</dt>
+              <dd>192.168.4.2</dd>
+            </div>
+          </dl>
+        </div>
+        <div class="network-traffic" aria-label="Network traffic counters">
+          <div>
+            <span>GUEST → HOST</span>
+            <strong id="network-tx">0 B</strong>
+            <small id="network-tx-frames">0 frames</small>
+          </div>
+          <div>
+            <span>HOST → GUEST</span>
+            <strong id="network-rx">0 B</strong>
+            <small id="network-rx-frames">0 frames</small>
+          </div>
+        </div>
+        <div class="section-heading">
+          <strong>Connection activity</strong>
+          <span id="network-policy">PUBLIC ONLY</span>
+        </div>
+        <ol id="network-events" class="network-events" aria-live="polite"></ol>
+        <div id="network-empty" class="network-empty">
+          <strong>等待固件联网</strong>
+          <span>TCP、UDP 与 DNS 流量将在这里显示</span>
+        </div>
+      </section>
+    </aside>
+
+    <dialog id="simulator-notice" class="firmware-dialog simulator-notice"
+            aria-labelledby="simulator-notice-title"
+            aria-describedby="simulator-notice-summary">
+      <div class="firmware-dialog-header">
+        <div>
+          <small>SIMULATOR NOTICE</small>
+          <h2 id="simulator-notice-title">这是模拟器，不是真实硬件</h2>
+        </div>
+      </div>
+
+      <div class="simulator-notice-body">
+        <p id="simulator-notice-summary" class="simulator-notice-summary">
+          部分外设和 IO 无法模拟。这里适合预览固件交互，不应替代真机兼容性与可靠性验证。
+        </p>
+
+        <div class="compatibility-summary">
+          <section aria-labelledby="simulator-supported-title">
+            <span class="compatibility-state is-supported">可用</span>
+            <div>
+              <h3 id="simulator-supported-title">核心交互</h3>
+              <p>ESP32-C3 固件执行、Flash 镜像、ST7789P3 显示、三枚功能键，以及基础扬声器、麦克风和串口日志。</p>
+            </div>
+          </section>
+          <section aria-labelledby="simulator-limited-title">
+            <span class="compatibility-state is-limited">受限</span>
+            <div>
+              <h3 id="simulator-limited-title">硬件与连接</h3>
+              <p>Wi-Fi 通过 Emulator Host Bridge 联网，但不等同于真实射频环境；BLE、电池与充电、NFC、低功耗、背光 PWM 和真实 USB/JTAG 不受支持。</p>
+            </div>
+          </section>
+        </div>
+
+        <p class="simulator-notice-footnote">
+          音频、时序、功耗、无线和模拟信号的表现均可能与实机不同，发布固件前请在真实设备上复测。
+        </p>
+      </div>
+
+      <div class="firmware-dialog-actions simulator-notice-actions">
+        <a href="https://github.com/FoloToy/ai-passport/tree/main/docs/hardware-design"
+           target="_blank" rel="noreferrer">查看硬件文档</a>
+        <form method="dialog">
+          <button class="dialog-confirm" type="submit" value="acknowledged" autofocus>
+            我知道了
+          </button>
+        </form>
+      </div>
+    </dialog>
+
+    <dialog id="firmware-guidance" class="firmware-dialog"
+            aria-labelledby="firmware-guidance-title">
+      <div class="firmware-dialog-header">
+        <div>
+          <small>EMULATOR FIRMWARE</small>
+          <h2 id="firmware-guidance-title">上传固件</h2>
+        </div>
+        <form method="dialog">
+          <button class="icon-button" type="submit" aria-label="关闭" title="关闭">×</button>
+        </form>
+      </div>
+
+      <div class="firmware-source-tabs" role="tablist" aria-label="固件来源">
+        <button id="firmware-source-local-tab" class="firmware-source-tab is-active"
+                type="button" role="tab" aria-selected="true"
+                aria-controls="firmware-source-local">本地文件</button>
+        <button id="firmware-source-community-tab" class="firmware-source-tab"
+                type="button" role="tab" aria-selected="false"
+                aria-controls="firmware-source-community">社区链接</button>
+      </div>
+
+      <section id="firmware-source-local" class="firmware-source-panel"
+               role="tabpanel" aria-labelledby="firmware-source-local-tab">
+        <p class="firmware-warning">请选择从 0x0 写入的完整固件，最大 8 MB。</p>
+      </section>
+
+      <section id="firmware-source-community" class="firmware-source-panel"
+               role="tabpanel" aria-labelledby="firmware-source-community-tab" hidden>
+        <label class="community-url-field" for="community-play-url">
+          <span>FoloToy 社区玩法 URL</span>
+          <input id="community-play-url" type="url" inputmode="url"
+                 autocomplete="url" spellcheck="false" required
+                 placeholder="https://ai-passport.folotoy.cn/plays/71/">
+        </label>
+      </section>
+      <p id="firmware-upload-error" class="inline-error" role="alert"></p>
+
+      <div class="firmware-dialog-actions">
+        <form method="dialog">
+          <button class="dialog-cancel" type="submit">取消</button>
+        </form>
+        <button id="confirm-firmware-upload" class="dialog-confirm" type="button">
+          选择固件
+        </button>
+      </div>
+    </dialog>
+  </body>
+</html>

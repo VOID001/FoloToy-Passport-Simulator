@@ -1,0 +1,27 @@
+{
+  "schemaVersion": 1,
+  "default": "official-demo",
+  "firmwares": [
+    {
+      "id": "music-keychain",
+      "title": "音乐钥匙扣",
+      "file": "/assets/firmware/music-keychain.bin",
+      "bytes": 8388608,
+      "sha256": "fc16e29a643551a342d899f2515941bf555a7a7eaa193c012aec38789d6e7280"
+    },
+    {
+      "id": "answer-book",
+      "title": "答案之书",
+      "file": "/assets/firmware/answer-book.bin",
+      "bytes": 2893040,
+      "sha256": "b4eedd4df80a101e7ad217827b7b826908983ac76b82df82b00c8458752d5f7d"
+    },
+    {
+      "id": "official-demo",
+      "title": "FoloToy 官方 Demo",
+      "file": "/assets/firmware/folotoy-demo.bin",
+      "bytes": 1579296,
+      "sha256": "38c8f5f611cb670085354e3d08a7d67c6f026cb1ef43d9bba92a6822d749045c"
+    }
+  ]
+}

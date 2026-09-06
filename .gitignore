@@ -1,0 +1,7 @@
+.build/
+.dbg/
+dist/
+artifacts/
+/*.bin
+tools/.smoke-*-temp.mjs
+.DS_Store
