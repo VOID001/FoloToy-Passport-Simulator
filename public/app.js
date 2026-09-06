@@ -9,6 +9,7 @@ import {
   REGISTER_NAMES,
   formatHex32,
 } from "./inspector.js";
+import { showSimulatorNoticeOnce } from "./simulator-notice.js";
 
 const DOUBLE_CLICK_WINDOW_MS = 300;
 const LONG_PRESS_MS = 300;
@@ -800,7 +801,7 @@ clearDisplay();
 
 async function startApplication() {
   await configureFirmwareSources();
-  simulatorNotice.showModal();
+  showSimulatorNoticeOnce(simulatorNotice);
   runtime.start().catch((error) => {
     setUploadBusy(false);
     setRuntimeState("waiting", "等待 WASM QEMU");
