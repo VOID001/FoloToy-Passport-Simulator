@@ -7,7 +7,7 @@
   "scripts": {
     "build": "npm run prepare:emulator && node tools/build-site.mjs",
     "prepare:emulator": "node tools/verify-board-runtime.mjs",
-    "start": "node server.mjs",
+    "start": "node server.mjs --allow-local-firmware-upload",
     "start:dist": "node dist/server.mjs",
     "verify:release": "node tools/verify-site.mjs",
     "test": "node --test"

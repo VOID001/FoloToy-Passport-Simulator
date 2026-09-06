@@ -31,13 +31,14 @@
                   aria-label="打开 Debug 检查器" title="Debug 检查器">
             <span aria-hidden="true">0x</span>
           </button>
-          <button id="firmware-upload" class="upload" type="button">
+          <button id="firmware-upload" class="upload" type="button" disabled
+                  aria-disabled="true">
             <span class="upload-icon" aria-hidden="true">↑</span>
-            <span class="upload-label">上传固件</span>
+            <span class="upload-label">加载固件</span>
           </button>
           <input id="firmware-file" class="visually-hidden" type="file"
                  accept=".bin,application/octet-stream" tabindex="-1"
-                 aria-label="选择固件文件">
+                 aria-label="选择固件文件" disabled>
           <button id="restart-runtime" class="restart" type="button">硬重启</button>
         </div>
       </header>
@@ -300,29 +301,29 @@
       <div class="firmware-dialog-header">
         <div>
           <small>EMULATOR FIRMWARE</small>
-          <h2 id="firmware-guidance-title">上传固件</h2>
+          <h2 id="firmware-guidance-title">加载固件</h2>
         </div>
         <form method="dialog">
           <button class="icon-button" type="submit" aria-label="关闭" title="关闭">×</button>
         </form>
       </div>
 
-      <div class="firmware-source-tabs" role="tablist" aria-label="固件来源">
-        <button id="firmware-source-local-tab" class="firmware-source-tab is-active"
-                type="button" role="tab" aria-selected="true"
-                aria-controls="firmware-source-local">本地文件</button>
-        <button id="firmware-source-community-tab" class="firmware-source-tab"
+      <div class="firmware-source-tabs" role="tablist" aria-label="固件来源" hidden>
+        <button id="firmware-source-local-tab" class="firmware-source-tab"
                 type="button" role="tab" aria-selected="false"
+                aria-controls="firmware-source-local">本地文件</button>
+        <button id="firmware-source-community-tab" class="firmware-source-tab is-active"
+                type="button" role="tab" aria-selected="true"
                 aria-controls="firmware-source-community">社区链接</button>
       </div>
 
       <section id="firmware-source-local" class="firmware-source-panel"
-               role="tabpanel" aria-labelledby="firmware-source-local-tab">
+               role="tabpanel" aria-labelledby="firmware-source-local-tab" hidden>
         <p class="firmware-warning">请选择从 0x0 写入的完整固件，最大 8 MB。</p>
       </section>
 
       <section id="firmware-source-community" class="firmware-source-panel"
-               role="tabpanel" aria-labelledby="firmware-source-community-tab" hidden>
+               role="tabpanel" aria-labelledby="firmware-source-community-tab">
         <label class="community-url-field" for="community-play-url">
           <span>FoloToy 社区玩法 URL</span>
           <input id="community-play-url" type="url" inputmode="url"
@@ -337,7 +338,7 @@
           <button class="dialog-cancel" type="submit">取消</button>
         </form>
         <button id="confirm-firmware-upload" class="dialog-confirm" type="button">
-          选择固件
+          导入并运行
         </button>
       </div>
     </dialog>

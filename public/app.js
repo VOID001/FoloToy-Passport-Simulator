@@ -23,10 +23,13 @@ const runtimeState = document.querySelector("#runtime-state");
 const runtimeLight = document.querySelector("#runtime-light");
 const logElement = document.querySelector("#event-log");
 const uploadControl = document.querySelector("#firmware-upload");
+const uploadLabel = uploadControl.querySelector(".upload-label");
 const firmwareInput = document.querySelector("#firmware-file");
 const firmwareGuidance = document.querySelector("#firmware-guidance");
+const firmwareGuidanceTitle = document.querySelector("#firmware-guidance-title");
 const simulatorNotice = document.querySelector("#simulator-notice");
 const confirmFirmwareUpload = document.querySelector("#confirm-firmware-upload");
+const firmwareSourceTabList = document.querySelector(".firmware-source-tabs");
 const firmwareSourceTabs = [...document.querySelectorAll(".firmware-source-tab")];
 const firmwareSourcePanels = [...document.querySelectorAll(".firmware-source-panel")];
 const communityPlayUrl = document.querySelector("#community-play-url");
@@ -71,6 +74,7 @@ let renderedRegisters = new Uint32Array(32);
 const uartBuffer = new UartConsoleBuffer();
 let uartPaused = false;
 let uartRenderPending = false;
+let allowLocalFirmwareUpload = false;
 const heldPointerButtons = new Set();
 const heldKeyboardButtons = new Set();
 const activeButtonGestures = new Map();
@@ -200,7 +204,7 @@ function setRuntimeState(state, detail) {
 }
 
 function setUploadBusy(busy) {
-  firmwareInput.disabled = busy;
+  firmwareInput.disabled = busy || !allowLocalFirmwareUpload;
   uploadControl.disabled = busy;
   uploadControl.setAttribute("aria-disabled", String(busy));
   uploadControl.setAttribute("aria-busy", String(busy));
@@ -561,10 +565,13 @@ uartInputForm.addEventListener("submit", (event) => {
   }
   uartInput.value = "";
 });
-let selectedFirmwareSource = "local";
+let selectedFirmwareSource = "community";
 const uploadError = document.querySelector("#firmware-upload-error");
 
 function selectFirmwareSource(source) {
+  if (source === "local" && !allowLocalFirmwareUpload) {
+    source = "community";
+  }
   selectedFirmwareSource = source;
   uploadError.textContent = "";
   firmwareSourceTabs.forEach((button) => {
@@ -581,6 +588,27 @@ function selectFirmwareSource(source) {
   } else {
     confirmFirmwareUpload.textContent = "选择固件";
   }
+}
+
+async function configureFirmwareSources() {
+  try {
+    const response = await fetch("/api/runtime-config", { cache: "no-store" });
+    if (!response.ok) throw new Error(`运行配置请求失败: ${response.status}`);
+    const config = await response.json();
+    allowLocalFirmwareUpload = config.allowLocalFirmwareUpload === true;
+  } catch (error) {
+    allowLocalFirmwareUpload = false;
+    log(`本地固件入口保持关闭：${error.message}`);
+  }
+
+  firmwareSourceTabList.hidden = !allowLocalFirmwareUpload;
+  firmwareInput.disabled = !allowLocalFirmwareUpload;
+  uploadControl.disabled = false;
+  uploadControl.setAttribute("aria-disabled", "false");
+  uploadLabel.textContent = allowLocalFirmwareUpload ? "上传固件" : "社区固件";
+  firmwareGuidanceTitle.textContent =
+    allowLocalFirmwareUpload ? "上传固件" : "加载社区固件";
+  selectFirmwareSource(allowLocalFirmwareUpload ? "local" : "community");
 }
 
 async function loadPresetFirmware(button) {
@@ -628,7 +656,7 @@ firmwareSourceTabs.forEach((button) => {
 });
 
 uploadControl.addEventListener("click", () => {
-  selectFirmwareSource("local");
+  selectFirmwareSource(allowLocalFirmwareUpload ? "local" : "community");
   firmwareGuidance.showModal();
 });
 
@@ -689,6 +717,11 @@ confirmFirmwareUpload.addEventListener("click", async () => {
     await importCommunityFirmware();
     return;
   }
+  if (!allowLocalFirmwareUpload) {
+    selectFirmwareSource("community");
+    uploadError.textContent = "当前部署不允许加载本地固件";
+    return;
+  }
   firmwareGuidance.close();
   firmwareInput.click();
 });
@@ -700,6 +733,7 @@ communityPlayUrl.addEventListener("keydown", (event) => {
 firmwareInput.addEventListener("change", async () => {
   const [file] = firmwareInput.files;
   firmwareInput.value = "";
+  if (!allowLocalFirmwareUpload) return;
   if (!file) return;
 
   const previousFirmwareName = activeFirmwareName;
@@ -763,10 +797,16 @@ renderUartConsole();
 resetNetworkView();
 setRuntimeState("waiting", "等待运行时");
 clearDisplay();
-simulatorNotice.showModal();
-runtime.start().catch((error) => {
-  setUploadBusy(false);
-  setRuntimeState("waiting", "等待 WASM QEMU");
-  overlay.querySelector("small").textContent = "放入 /public/wasm/manifest.json 后自动启动";
-  log(error.message);
-});
+
+async function startApplication() {
+  await configureFirmwareSources();
+  simulatorNotice.showModal();
+  runtime.start().catch((error) => {
+    setUploadBusy(false);
+    setRuntimeState("waiting", "等待 WASM QEMU");
+    overlay.querySelector("small").textContent = "放入 /public/wasm/manifest.json 后自动启动";
+    log(error.message);
+  });
+}
+
+startApplication();

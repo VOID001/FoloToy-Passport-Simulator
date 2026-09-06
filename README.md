@@ -63,6 +63,9 @@ HOST=0.0.0.0 PORT=4190 npm start
 点击“上传固件”可选择本地 `.bin` 文件，或粘贴
 `https://ai-passport.folotoy.cn/plays/` 下的玩法详情链接。
 
+本地开发命令 `npm start` 会启用本地文件入口。`dist/` 发布包和 Docker
+镜像默认关闭该入口，只允许从 FoloToy 社区加载经过服务端校验的固件。
+
 本地固件需要满足以下条件：
 
 - ESP32-C3 Full Flash 合并镜像
@@ -71,6 +74,13 @@ HOST=0.0.0.0 PORT=4190 npm start
 - 包含 bootloader、分区表、应用和所需资源
 
 上传的本地固件只保存在当前页面中，刷新后会恢复默认固件。
+
+如需显式覆盖本地固件策略，可设置：
+
+```bash
+EMULATOR_ALLOW_LOCAL_FIRMWARE_UPLOAD=1 node server.mjs  # 启用
+EMULATOR_ALLOW_LOCAL_FIRMWARE_UPLOAD=0 npm start        # 关闭
+```
 
 ## 生产部署
 

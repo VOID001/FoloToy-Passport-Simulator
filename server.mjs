@@ -15,6 +15,7 @@ const PORT = Number(process.env.PORT || 4190);
 const directory = path.dirname(fileURLToPath(import.meta.url));
 const publicRoot = path.join(directory, "public");
 const MAX_REQUEST_BYTES = 8 * 1024;
+const LOCAL_FIRMWARE_UPLOAD_ENV = "EMULATOR_ALLOW_LOCAL_FIRMWARE_UPLOAD";
 
 const mimeTypes = {
   ".css": "text/css; charset=utf-8",
@@ -45,7 +46,7 @@ function assetPath(pathname) {
   return filename.startsWith(`${publicRoot}${path.sep}`) ? filename : null;
 }
 
-function writeJson(response, status, payload) {
+function writeJson(response, status, payload, includeBody = true) {
   const body = Buffer.from(JSON.stringify(payload));
   response.writeHead(status, {
     ...securityHeaders,
@@ -53,7 +54,17 @@ function writeJson(response, status, payload) {
     "content-length": body.byteLength,
     "content-type": "application/json; charset=utf-8",
   });
-  response.end(body);
+  response.end(includeBody ? body : undefined);
+}
+
+export function localFirmwareUploadEnabled({
+  env = process.env,
+  argv = process.argv,
+} = {}) {
+  if (env[LOCAL_FIRMWARE_UPLOAD_ENV] !== undefined) {
+    return env[LOCAL_FIRMWARE_UPLOAD_ENV] === "1";
+  }
+  return argv.includes("--allow-local-firmware-upload");
 }
 
 async function readJsonRequest(request) {
@@ -111,7 +122,7 @@ async function serveCommunityFirmware(request, response) {
   }
 }
 
-async function serve(request, response) {
+async function serve(request, response, runtimeConfig) {
   const requestUrl = new URL(request.url, `http://${request.headers.host}`);
   if (requestUrl.pathname === "/healthz") {
     if (!["GET", "HEAD"].includes(request.method)) {
@@ -127,6 +138,15 @@ async function serve(request, response) {
       "content-type": "application/json; charset=utf-8",
     });
     response.end(request.method === "HEAD" ? undefined : body);
+    return;
+  }
+  if (requestUrl.pathname === "/api/runtime-config") {
+    if (!["GET", "HEAD"].includes(request.method)) {
+      response.writeHead(405, { ...securityHeaders, allow: "GET, HEAD" });
+      response.end();
+      return;
+    }
+    writeJson(response, 200, runtimeConfig, request.method === "GET");
     return;
   }
   if (requestUrl.pathname === "/api/community-firmware") {
@@ -166,8 +186,15 @@ async function serve(request, response) {
   }
 }
 
-export function createAppServer() {
-  return attachNetworkBridge(http.createServer(serve));
+export function createAppServer(options = {}) {
+  const runtimeConfig = Object.freeze({
+    allowLocalFirmwareUpload:
+      options.allowLocalFirmwareUpload ?? localFirmwareUploadEnabled(),
+  });
+  const server = http.createServer(
+    (request, response) => serve(request, response, runtimeConfig),
+  );
+  return attachNetworkBridge(server, options.networkBridge);
 }
 
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {

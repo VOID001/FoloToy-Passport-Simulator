@@ -15,6 +15,11 @@ npm run verify:release
 ESP-EMU runtime, bundled firmware assets, community import proxy, deployment
 metadata, and `SHA256SUMS`.
 
+The release server disables local firmware selection by default. Production
+users can only load firmware through the server-verified FoloToy community
+import flow. Set `EMULATOR_ALLOW_LOCAL_FIRMWARE_UPLOAD=1` only for a trusted
+local deployment that explicitly needs local `.bin` files.
+
 ## Run The Release
 
 ```bash

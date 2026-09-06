@@ -394,6 +394,7 @@ body.inspector-open .emulator { margin-right: min(440px, 36vw); }
   border-radius: 4px;
   overflow: hidden;
 }
+.firmware-source-tabs[hidden] { display: none; }
 .firmware-source-tab {
   min-height: 38px;
   padding: 8px 12px;
