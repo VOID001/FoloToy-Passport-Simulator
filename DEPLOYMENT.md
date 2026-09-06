@@ -29,6 +29,37 @@ HOST=0.0.0.0 PORT=4190 npm start
 
 The health check endpoint is `GET /healthz`.
 
+## Environment Variables
+
+| Variable | Default | Production recommendation | Description |
+| --- | --- | --- | --- |
+| `HOST` | `127.0.0.1` | `0.0.0.0` | Address on which the HTTP server listens. |
+| `PORT` | `4190` | Platform-provided value | HTTP and WebSocket port. Railway supplies this automatically. |
+| `EMULATOR_ALLOW_LOCAL_FIRMWARE_UPLOAD` | Disabled | `0` | Set to `1` only when users should be able to select arbitrary local `.bin` files. |
+| `EMULATOR_NETWORK_ALLOW_PRIVATE` | Disabled | `0` | Set to `1` only in a trusted environment to allow emulated firmware to reach private, loopback, and reserved addresses. |
+
+Environment variables take precedence over command-line defaults. The source
+development command, `npm start`, passes `--allow-local-firmware-upload`.
+The generated `dist/package.json` does not pass that flag, so release
+deployments remain fail-closed unless
+`EMULATOR_ALLOW_LOCAL_FIRMWARE_UPLOAD=1` is explicitly configured.
+
+Recommended Railway variables:
+
+```env
+HOST=0.0.0.0
+EMULATOR_ALLOW_LOCAL_FIRMWARE_UPLOAD=0
+EMULATOR_NETWORK_ALLOW_PRIVATE=0
+```
+
+Do not set `PORT` on Railway unless the platform configuration specifically
+requires it. Railway injects `PORT` for the service.
+
+`EMULATOR_ALLOW_LOCAL_FIRMWARE_UPLOAD` controls the product UI and local file
+handling path. It is not authentication for `/api/emulator-network`. Keep the
+network bridge protected by its destination restrictions and by access control
+at the deployment or reverse-proxy layer.
+
 ## Docker
 
 ```bash
