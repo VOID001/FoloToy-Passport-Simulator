@@ -19,6 +19,10 @@ const expectedPresets = new Map([
     "/assets/firmware/folotoy-demo.bin",
     "38c8f5f611cb670085354e3d08a7d67c6f026cb1ef43d9bba92a6822d749045c",
   ],
+  [
+    "/assets/firmware/feishu-calendar-assistant.bin",
+    "95a428618ec2d44feacd4a1ffc9467b003c2ccb44cea455776f5bd339c68199e",
+  ],
 ]);
 
 test("ships every firmware preset referenced by the sidebar", async () => {
