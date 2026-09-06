@@ -37,6 +37,9 @@ const communityPlayUrl = document.querySelector("#community-play-url");
 const presetButtons = [...document.querySelectorAll(".firmware-preset")];
 const presetFeedback = document.querySelector("#preset-feedback");
 const inspectorToggle = document.querySelector("#inspector-toggle");
+const fullscreenToggle = document.querySelector("#fullscreen-toggle");
+const fullscreenExit = document.querySelector("#fullscreen-exit");
+const simulatorStage = document.querySelector("#simulator-stage");
 const audioEnable = document.querySelector("#audio-enable");
 const microphoneToggle = document.querySelector("#microphone-toggle");
 const inspectorPanel = document.querySelector("#debug-panel");
@@ -76,6 +79,7 @@ const uartBuffer = new UartConsoleBuffer();
 let uartPaused = false;
 let uartRenderPending = false;
 let allowLocalFirmwareUpload = false;
+let fullscreenFallback = false;
 const heldPointerButtons = new Set();
 const heldKeyboardButtons = new Set();
 const activeButtonGestures = new Map();
@@ -321,6 +325,56 @@ function setInspectorOpen(open) {
   syncNetworkDebugState();
 }
 
+function isSimulatorFullscreen() {
+  return document.fullscreenElement === simulatorStage || fullscreenFallback;
+}
+
+function syncFullscreenState() {
+  const active = isSimulatorFullscreen();
+  simulatorStage.classList.toggle("is-fullscreen", active);
+  document.body.classList.toggle("simulator-fullscreen", fullscreenFallback);
+  fullscreenToggle.setAttribute("aria-pressed", String(active));
+  fullscreenToggle.setAttribute(
+    "aria-label",
+    active ? "退出模拟器全屏" : "全屏显示模拟器",
+  );
+  fullscreenToggle.title = active ? "退出模拟器全屏" : "全屏显示模拟器";
+  fullscreenExit.hidden = !active;
+}
+
+async function enterSimulatorFullscreen() {
+  if (inspectorPanel.classList.contains("is-open")) setInspectorOpen(false);
+  fullscreenFallback = true;
+  syncFullscreenState();
+  if (typeof simulatorStage.requestFullscreen === "function") {
+    try {
+      await simulatorStage.requestFullscreen();
+      fullscreenFallback = false;
+      syncFullscreenState();
+      return;
+    } catch {
+      // Keep the viewport-filling mode when fullscreen is unavailable.
+    }
+  }
+}
+
+async function exitSimulatorFullscreen() {
+  fullscreenFallback = false;
+  if (document.fullscreenElement === simulatorStage) {
+    await document.exitFullscreen();
+  }
+  syncFullscreenState();
+}
+
+async function toggleSimulatorFullscreen() {
+  if (isSimulatorFullscreen()) {
+    await exitSimulatorFullscreen();
+    fullscreenToggle.focus();
+    return;
+  }
+  await enterSimulatorFullscreen();
+}
+
 function drawFrame({ pixels, x = 0, y = 0, width, height }) {
   if (x + width > display.width || y + height > display.height) return;
   context.putImageData(
@@ -549,6 +603,12 @@ inspectorToggle.addEventListener("click", () => {
   setInspectorOpen(!inspectorPanel.classList.contains("is-open"));
 });
 document.querySelector("#inspector-close").addEventListener("click", () => setInspectorOpen(false));
+fullscreenToggle.addEventListener("click", toggleSimulatorFullscreen);
+fullscreenExit.addEventListener("click", toggleSimulatorFullscreen);
+document.addEventListener("fullscreenchange", () => {
+  if (document.fullscreenElement !== simulatorStage) fullscreenFallback = false;
+  syncFullscreenState();
+});
 document.querySelectorAll("[data-debug-tab]").forEach((button) => {
   button.addEventListener("click", () => selectDebugTab(button.dataset.debugTab));
 });
@@ -764,6 +824,11 @@ firmwareInput.addEventListener("change", async () => {
   }
 });
 document.addEventListener("keydown", (event) => {
+  if (event.key === "Escape" && fullscreenFallback) {
+    event.preventDefault();
+    exitSimulatorFullscreen().then(() => fullscreenToggle.focus());
+    return;
+  }
   if (event.key === "Escape" && inspectorPanel.classList.contains("is-open")) {
     event.preventDefault();
     setInspectorOpen(false);
