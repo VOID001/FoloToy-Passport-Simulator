@@ -262,37 +262,47 @@
 
     <dialog id="simulator-notice" class="firmware-dialog simulator-notice"
             aria-labelledby="simulator-notice-title"
-            aria-describedby="simulator-notice-summary">
+            aria-describedby="simulator-notice-footnote">
       <div class="firmware-dialog-header">
         <div>
           <small>SIMULATOR NOTICE</small>
-          <h2 id="simulator-notice-title">这是模拟器，不是真实硬件</h2>
+          <h2 id="simulator-notice-title">此模拟器仅供娱乐体验使用，非硬件真实完整模拟</h2>
         </div>
       </div>
 
       <div class="simulator-notice-body">
-        <p id="simulator-notice-summary" class="simulator-notice-summary">
-          部分外设和 IO 无法模拟。这里适合预览固件交互，不应替代真机兼容性与可靠性验证。
-        </p>
+        <dl class="compatibility-list" aria-label="硬件兼容情况">
+          <div>
+            <dt>屏幕显示</dt>
+            <dd class="is-supported">兼容</dd>
+          </div>
+          <div>
+            <dt>音频</dt>
+            <dd class="is-supported">兼容</dd>
+          </div>
+          <div>
+            <dt>Wifi</dt>
+            <dd class="is-virtual">虚拟网络</dd>
+          </div>
+          <div>
+            <dt>按键</dt>
+            <dd class="is-supported">兼容</dd>
+          </div>
+          <div>
+            <dt>BLE</dt>
+            <dd class="is-unsupported">不支持</dd>
+          </div>
+          <div>
+            <dt>NFC</dt>
+            <dd class="is-unsupported">不支持</dd>
+          </div>
+          <div>
+            <dt>Battery</dt>
+            <dd class="is-unsupported">不支持</dd>
+          </div>
+        </dl>
 
-        <div class="compatibility-summary">
-          <section aria-labelledby="simulator-supported-title">
-            <span class="compatibility-state is-supported">可用</span>
-            <div>
-              <h3 id="simulator-supported-title">核心交互</h3>
-              <p>ESP32-C3 固件执行、Flash 镜像、ST7789P3 显示、三枚功能键，以及基础扬声器、麦克风和串口日志。</p>
-            </div>
-          </section>
-          <section aria-labelledby="simulator-limited-title">
-            <span class="compatibility-state is-limited">受限</span>
-            <div>
-              <h3 id="simulator-limited-title">硬件与连接</h3>
-              <p>Wi-Fi 通过 Emulator Host Bridge 联网，但不等同于真实射频环境；BLE、电池与充电、NFC、低功耗、背光 PWM 和真实 USB/JTAG 不受支持。</p>
-            </div>
-          </section>
-        </div>
-
-        <p class="simulator-notice-footnote">
+        <p id="simulator-notice-footnote" class="simulator-notice-footnote">
           音频、时序、功耗、无线和模拟信号的表现均可能与实机不同，发布固件前请在真实设备上复测。
         </p>
       </div>

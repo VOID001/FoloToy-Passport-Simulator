@@ -549,59 +549,65 @@ body.inspector-open .emulator { margin-right: min(440px, 36vw); }
   cursor: wait;
 }
 .simulator-notice {
-  width: min(620px, calc(100vw - 32px));
+  width: min(560px, calc(100vw - 32px));
+}
+.simulator-notice .firmware-dialog-header {
+  padding: 16px 20px 14px;
+}
+.simulator-notice .firmware-dialog-header small {
+  margin-bottom: 4px;
 }
 .simulator-notice-body {
-  padding: 20px;
+  padding: 12px 20px;
 }
-.simulator-notice-summary {
-  margin: 0 0 20px;
-  color: #cbd4d8;
-  font-size: 14px;
-  line-height: 1.7;
-  text-wrap: pretty;
-}
-.compatibility-summary {
+.compatibility-list {
+  margin: 0;
   border-block: 1px solid var(--line);
 }
-.compatibility-summary section {
+.compatibility-list > div {
   display: grid;
-  grid-template-columns: 54px minmax(0, 1fr);
-  gap: 14px;
-  padding: 16px 0;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 20px;
+  min-height: 36px;
+  padding: 6px 2px;
 }
-.compatibility-summary section + section {
+.compatibility-list > div + div {
   border-top: 1px solid var(--line);
 }
-.compatibility-state {
-  padding-top: 3px;
-  font: 700 10px/1.4 "SF Mono", "Noto Sans Mono CJK SC", monospace;
-}
-.compatibility-state.is-supported { color: var(--mint); }
-.compatibility-state.is-limited { color: var(--amber); }
-.compatibility-summary h3 {
-  margin: 0;
+.compatibility-list dt {
+  color: #cbd4d8;
   font-size: 13px;
-  line-height: 1.45;
-  letter-spacing: 0;
+  font-weight: 600;
 }
-.compatibility-summary p {
-  margin: 5px 0 0;
-  color: #aab3b8;
-  font-size: 12px;
-  line-height: 1.65;
-  text-wrap: pretty;
+.compatibility-list dd {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  font: 700 11px/1.4 "SF Mono", "Noto Sans Mono CJK SC", monospace;
 }
+.compatibility-list dd::before {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: currentColor;
+  content: "";
+}
+.compatibility-list .is-supported { color: var(--mint); }
+.compatibility-list .is-virtual { color: var(--amber); }
+.compatibility-list .is-unsupported { color: var(--danger); }
 .simulator-notice-footnote {
-  margin: 18px 0 0;
+  margin: 12px 0 0;
   color: #f3aaa5;
   font-size: 12px;
-  line-height: 1.65;
+  line-height: 1.55;
   text-wrap: pretty;
 }
 .simulator-notice-actions {
   align-items: center;
   justify-content: space-between;
+  padding: 12px 20px 14px;
   border-top: 1px solid var(--line);
 }
 .simulator-notice-actions > a {
