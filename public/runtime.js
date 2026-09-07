@@ -7,9 +7,9 @@ export class QemuRuntime extends EventTarget {
   #manifest = null;
   #networkDebug = false;
 
-  async start() {
+  async start(firmwareUrl) {
     const manifest = await this.#loadManifest();
-    const response = await fetch(manifest.firmware, { cache: "no-store" });
+    const response = await fetch(firmwareUrl || manifest.firmware, { cache: "no-store" });
     if (!response.ok) {
       throw new Error(`Firmware request failed: ${response.status}`);
     }

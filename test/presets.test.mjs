@@ -3,7 +3,11 @@ import { createHash } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
 
-import { MAX_FIRMWARE_BYTES } from "../public/firmware.js";
+import {
+  DEFAULT_FIRMWARE_PRESET_ID,
+  FIRMWARE_PRESET_IDS_BY_URL_ID,
+  MAX_FIRMWARE_BYTES,
+} from "../public/firmware.js";
 
 const publicRoot = new URL("../public/", import.meta.url);
 const expectedPresets = new Map([
@@ -35,7 +39,11 @@ test("ships every firmware preset referenced by the sidebar", async () => {
 
   assert.deepEqual(urls, [...expectedPresets.keys()]);
   assert.equal(catalog.schemaVersion, 1);
-  assert.equal(catalog.default, "official-demo");
+  assert.equal(catalog.default, DEFAULT_FIRMWARE_PRESET_ID);
+  assert.deepEqual(
+    Object.values(FIRMWARE_PRESET_IDS_BY_URL_ID),
+    catalog.firmwares.map((firmware) => firmware.id),
+  );
   assert.deepEqual(
     catalog.firmwares.map((firmware) => firmware.file),
     [...expectedPresets.keys()],

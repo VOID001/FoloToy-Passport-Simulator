@@ -1,4 +1,28 @@
 export const MAX_FIRMWARE_BYTES = 8 * 1024 * 1024;
+export const DEFAULT_FIRMWARE_PRESET_ID = "official-demo";
+export const FIRMWARE_PRESET_IDS_BY_URL_ID = Object.freeze({
+  1: "music-keychain",
+  2: "answer-book",
+  3: DEFAULT_FIRMWARE_PRESET_ID,
+  4: "feishu-calendar-assistant",
+});
+
+export function resolveFirmwarePresetId(
+  search,
+  availableIds,
+  defaultId = DEFAULT_FIRMWARE_PRESET_ID,
+) {
+  const ids = availableIds instanceof Set ? availableIds : new Set(availableIds);
+  if (!ids.has(defaultId)) {
+    throw new Error(`默认固件不存在: ${defaultId}`);
+  }
+
+  const urlId = new URLSearchParams(search).get("id");
+  const requestedId = Object.hasOwn(FIRMWARE_PRESET_IDS_BY_URL_ID, urlId)
+    ? FIRMWARE_PRESET_IDS_BY_URL_ID[urlId]
+    : undefined;
+  return ids.has(requestedId) ? requestedId : defaultId;
+}
 
 export function formatFirmwareSize(bytes) {
   if (bytes < 1024 * 1024) return `${Math.ceil(bytes / 1024)} KB`;

@@ -1,6 +1,10 @@
 import { QemuRuntime } from "./runtime.js";
 import { BrowserAudio } from "./audio.js";
-import { formatFirmwareSize, validateFirmwareFile } from "./firmware.js";
+import {
+  formatFirmwareSize,
+  resolveFirmwarePresetId,
+  validateFirmwareFile,
+} from "./firmware.js";
 import {
   UartConsoleBuffer,
   encodeUartCommand,
@@ -35,6 +39,14 @@ const firmwareSourceTabs = [...document.querySelectorAll(".firmware-source-tab")
 const firmwareSourcePanels = [...document.querySelectorAll(".firmware-source-panel")];
 const communityPlayUrl = document.querySelector("#community-play-url");
 const presetButtons = [...document.querySelectorAll(".firmware-preset")];
+const presetButtonsById = new Map(
+  presetButtons.map((button) => [button.dataset.firmwareId, button]),
+);
+const initialPresetId = resolveFirmwarePresetId(
+  window.location.search,
+  presetButtonsById.keys(),
+);
+const initialPresetButton = presetButtonsById.get(initialPresetId);
 const presetFeedback = document.querySelector("#preset-feedback");
 const inspectorToggle = document.querySelector("#inspector-toggle");
 const fullscreenToggle = document.querySelector("#fullscreen-toggle");
@@ -67,9 +79,9 @@ const networkRx = document.querySelector("#network-rx");
 const networkRxFrames = document.querySelector("#network-rx-frames");
 const networkEvents = document.querySelector("#network-events");
 const networkEmpty = document.querySelector("#network-empty");
-let activeFirmwareName = "FoloToy 官方 Demo";
-let activePresetId = "official-demo";
-let pendingPresetId = "official-demo";
+let activeFirmwareName = initialPresetButton.dataset.firmwareName;
+let activePresetId = initialPresetId;
+let pendingPresetId = initialPresetId;
 let currentRuntimeState = "waiting";
 let activeDebugTab = "cpu";
 let latestDebugSnapshot = null;
@@ -860,11 +872,12 @@ renderUartConsole();
 resetNetworkView();
 setRuntimeState("waiting", "等待运行时");
 clearDisplay();
+renderPresetStates();
 
 async function startApplication() {
   await configureFirmwareSources();
   showSimulatorNoticeOnce(simulatorNotice);
-  runtime.start().catch((error) => {
+  runtime.start(initialPresetButton.dataset.firmwareUrl).catch((error) => {
     setUploadBusy(false);
     setRuntimeState("waiting", "等待 WASM QEMU");
     overlay.querySelector("small").textContent = "放入 /public/wasm/manifest.json 后自动启动";
