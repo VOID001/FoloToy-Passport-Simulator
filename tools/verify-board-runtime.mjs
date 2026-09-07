@@ -25,7 +25,7 @@ assert.equal(
 );
 assert.equal(
   createHash("sha256").update(wasmBytes).digest("hex"),
-  "cc6e1de345521da73176019cbd0bc2963d71bed80c11fbbb3e57d52fb99ecfc8",
+  "1c693687ba9cd7414d7be09c5916306a672029169ad7c2d4acd7629e97bb6b14",
   "patched ESP-EMU checksum mismatch",
 );
 
