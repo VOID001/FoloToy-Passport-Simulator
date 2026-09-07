@@ -7,10 +7,17 @@ const css = await readFile(new URL("../public/styles.css", import.meta.url), "ut
 const app = await readFile(new URL("../public/app.js", import.meta.url), "utf8");
 
 test("offers an accessible simulator-only fullscreen mode", () => {
-  assert.match(html, /id="fullscreen-toggle"/);
+  const toolbarEnd = html.indexOf("</header>", html.indexOf('<header class="toolbar">'));
+  const stageStart = html.indexOf('<section id="simulator-stage"');
+  const shellStart = html.indexOf('<div class="passport-shell">', stageStart);
+  const toggle = html.indexOf('id="fullscreen-toggle"');
+
+  assert.ok(toggle > shellStart);
+  assert.ok(toggle > toolbarEnd);
   assert.match(html, /aria-controls="simulator-stage"/);
-  assert.match(html, /id="fullscreen-exit"/);
-  assert.match(html, /aria-label="退出全屏"/);
+  assert.match(html, /class="fullscreen-enter-icon"/);
+  assert.match(html, /class="fullscreen-exit-icon"/);
+  assert.doesNotMatch(html, /id="fullscreen-exit"/);
   assert.match(app, /simulatorStage\.requestFullscreen\(\)/);
   assert.match(app, /document\.exitFullscreen\(\)/);
   assert.match(app, /document\.addEventListener\("fullscreenchange"/);

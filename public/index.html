@@ -43,18 +43,6 @@
                   aria-label="打开 Debug 检查器" title="Debug 检查器">
             <span aria-hidden="true">0x</span>
           </button>
-          <button id="fullscreen-toggle" class="fullscreen-toggle" type="button"
-                  aria-controls="simulator-stage" aria-pressed="false"
-                  aria-label="全屏显示模拟器" title="全屏显示模拟器">
-            <svg aria-hidden="true" viewBox="0 0 24 24" fill="none"
-                 stroke="currentColor" stroke-width="2" stroke-linecap="round"
-                 stroke-linejoin="round">
-              <path d="M15 3h6v6"></path>
-              <path d="M9 21H3v-6"></path>
-              <path d="m21 3-7 7"></path>
-              <path d="m3 21 7-7"></path>
-            </svg>
-          </button>
           <button id="firmware-upload" class="upload" type="button" disabled
                   aria-disabled="true">
             <span class="upload-icon" aria-hidden="true">↑</span>
@@ -130,18 +118,29 @@
 
         <section id="simulator-stage" class="stage"
                  aria-label="FoloToy Passport virtual device">
-          <button id="fullscreen-exit" class="fullscreen-exit" type="button"
-                  aria-label="退出全屏" title="退出全屏" hidden>
-            <svg aria-hidden="true" viewBox="0 0 24 24" fill="none"
-                 stroke="currentColor" stroke-width="2" stroke-linecap="round"
-                 stroke-linejoin="round">
-              <path d="m14 10 7-7"></path>
-              <path d="M20 10h-6V4"></path>
-              <path d="m3 21 7-7"></path>
-              <path d="M4 14h6v6"></path>
-            </svg>
-          </button>
           <div class="passport-shell">
+            <button id="fullscreen-toggle" class="fullscreen-toggle" type="button"
+                    aria-controls="simulator-stage" aria-pressed="false"
+                    aria-label="全屏显示模拟器" title="全屏显示模拟器">
+              <svg class="fullscreen-enter-icon" aria-hidden="true"
+                   viewBox="0 0 24 24" fill="none"
+                   stroke="currentColor" stroke-width="2" stroke-linecap="round"
+                   stroke-linejoin="round">
+                <path d="M15 3h6v6"></path>
+                <path d="M9 21H3v-6"></path>
+                <path d="m21 3-7 7"></path>
+                <path d="m3 21 7-7"></path>
+              </svg>
+              <svg class="fullscreen-exit-icon" aria-hidden="true"
+                   viewBox="0 0 24 24" fill="none"
+                   stroke="currentColor" stroke-width="2" stroke-linecap="round"
+                   stroke-linejoin="round">
+                <path d="m14 10 7-7"></path>
+                <path d="M20 10h-6V4"></path>
+                <path d="m3 21 7-7"></path>
+                <path d="M4 14h6v6"></path>
+              </svg>
+            </button>
             <img class="shell-art" src="/assets/ai-passport-shell-reference.png" alt="">
             <div class="screen-bezel">
               <canvas id="qemu-display" width="240" height="320" aria-label="QEMU firmware display"></canvas>

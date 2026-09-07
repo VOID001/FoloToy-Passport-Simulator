@@ -38,7 +38,6 @@ const presetButtons = [...document.querySelectorAll(".firmware-preset")];
 const presetFeedback = document.querySelector("#preset-feedback");
 const inspectorToggle = document.querySelector("#inspector-toggle");
 const fullscreenToggle = document.querySelector("#fullscreen-toggle");
-const fullscreenExit = document.querySelector("#fullscreen-exit");
 const simulatorStage = document.querySelector("#simulator-stage");
 const audioEnable = document.querySelector("#audio-enable");
 const microphoneToggle = document.querySelector("#microphone-toggle");
@@ -339,7 +338,6 @@ function syncFullscreenState() {
     active ? "退出模拟器全屏" : "全屏显示模拟器",
   );
   fullscreenToggle.title = active ? "退出模拟器全屏" : "全屏显示模拟器";
-  fullscreenExit.hidden = !active;
 }
 
 async function enterSimulatorFullscreen() {
@@ -604,7 +602,6 @@ inspectorToggle.addEventListener("click", () => {
 });
 document.querySelector("#inspector-close").addEventListener("click", () => setInspectorOpen(false));
 fullscreenToggle.addEventListener("click", toggleSimulatorFullscreen);
-fullscreenExit.addEventListener("click", toggleSimulatorFullscreen);
 document.addEventListener("fullscreenchange", () => {
   if (document.fullscreenElement !== simulatorStage) fullscreenFallback = false;
   syncFullscreenState();
