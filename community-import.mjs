@@ -8,11 +8,36 @@ import {
 
 export { COMMUNITY_ORIGIN };
 
+export const COMMUNITY_DOWNLOAD_RETRIES = 3;
+const COMMUNITY_RETRY_BASE_DELAY_MS = 250;
+
 export class CommunityImportError extends Error {
-  constructor(message, status = 400) {
+  constructor(message, status = 400, { retryable = false } = {}) {
     super(message);
     this.name = "CommunityImportError";
     this.status = status;
+    this.retryable = retryable;
+  }
+}
+
+function isRetryableHttpStatus(status) {
+  return status === 408 || status === 425 || status === 429 || status >= 500;
+}
+
+function waitForRetry(delayMs) {
+  return new Promise((resolve) => setTimeout(resolve, delayMs));
+}
+
+async function retryCommunityOperation(operation, retryDelay) {
+  for (let retryCount = 0; ; retryCount += 1) {
+    try {
+      return await operation();
+    } catch (error) {
+      const retryable =
+        !(error instanceof CommunityImportError) || error.retryable;
+      if (!retryable || retryCount >= COMMUNITY_DOWNLOAD_RETRIES) throw error;
+      await retryDelay(COMMUNITY_RETRY_BASE_DELAY_MS * (2 ** retryCount));
+    }
   }
 }
 
@@ -118,16 +143,30 @@ async function readMetadata(response) {
   return payload;
 }
 
-export async function fetchCommunityFirmware(value, fetchImpl = fetch) {
+export async function fetchCommunityFirmware(
+  value,
+  fetchImpl = fetch,
+  { retryDelay = waitForRetry } = {},
+) {
   const reference = parseCommunityPlayUrl(value);
   const metadataPath = reference.kind === "id"
     ? `/api/plays/id/${encodeURIComponent(reference.value)}`
     : `/api/plays/${encodeURIComponent(reference.value)}`;
-  const metadataResponse = await fetchImpl(`${COMMUNITY_ORIGIN}${metadataPath}`, {
-    headers: { accept: "application/json" },
-    redirect: "error",
-    signal: AbortSignal.timeout(30_000),
-  });
+  const metadataResponse = await retryCommunityOperation(async () => {
+    const response = await fetchImpl(`${COMMUNITY_ORIGIN}${metadataPath}`, {
+      headers: { accept: "application/json" },
+      redirect: "error",
+      signal: AbortSignal.timeout(30_000),
+    });
+    if (!response.ok && isRetryableHttpStatus(response.status)) {
+      throw new CommunityImportError(
+        "FoloToy 社区暂时无法读取",
+        502,
+        { retryable: true },
+      );
+    }
+    return response;
+  }, retryDelay);
   const payload = await readMetadata(metadataResponse);
   const play = payload?.play;
   const firmware = play?.firmware;
@@ -160,23 +199,43 @@ export async function fetchCommunityFirmware(value, fetchImpl = fetch) {
     throw new CommunityImportError("社区固件下载地址无效", 422);
   }
 
-  const firmwareResponse = await fetchImpl(downloadUrl, {
-    headers: { accept: "application/octet-stream" },
-    redirect: "error",
-    signal: AbortSignal.timeout(30_000),
-  });
-  if (!firmwareResponse.ok) {
-    throw new CommunityImportError("社区固件下载失败", 502);
-  }
-  const bytes = await readLimitedBody(firmwareResponse, MAX_FIRMWARE_BYTES);
-  if (bytes.byteLength !== firmware.size) {
-    throw new CommunityImportError("社区固件大小与发布信息不一致", 502);
-  }
+  const { bytes, sha256 } = await retryCommunityOperation(async () => {
+    const firmwareResponse = await fetchImpl(downloadUrl, {
+      headers: { accept: "application/octet-stream" },
+      redirect: "error",
+      signal: AbortSignal.timeout(30_000),
+    });
+    if (!firmwareResponse.ok) {
+      throw new CommunityImportError(
+        "社区固件下载失败",
+        502,
+        { retryable: isRetryableHttpStatus(firmwareResponse.status) },
+      );
+    }
+    const downloadedBytes = await readLimitedBody(
+      firmwareResponse,
+      MAX_FIRMWARE_BYTES,
+    );
+    if (downloadedBytes.byteLength !== firmware.size) {
+      throw new CommunityImportError(
+        "社区固件大小与发布信息不一致",
+        502,
+        { retryable: true },
+      );
+    }
 
-  const sha256 = createHash("sha256").update(bytes).digest("hex");
-  if (sha256 !== firmware.sha256.toLowerCase()) {
-    throw new CommunityImportError("社区固件 SHA-256 校验失败", 502);
-  }
+    const downloadedSha256 = createHash("sha256")
+      .update(downloadedBytes)
+      .digest("hex");
+    if (downloadedSha256 !== firmware.sha256.toLowerCase()) {
+      throw new CommunityImportError(
+        "社区固件 SHA-256 校验失败",
+        502,
+        { retryable: true },
+      );
+    }
+    return { bytes: downloadedBytes, sha256: downloadedSha256 };
+  }, retryDelay);
 
   const title = String(play.title?.zh || play.title?.en || play.slug || "社区固件");
   return {
