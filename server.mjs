@@ -30,14 +30,13 @@ const securityHeaders = {
   "content-security-policy":
     "default-src 'self'; base-uri 'none'; connect-src 'self'; img-src 'self' data:; " +
     "media-src 'self'; object-src 'none'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self'; " +
-    "worker-src 'self'; frame-ancestors 'none'",
+    "worker-src 'self'",
   "cross-origin-embedder-policy": "require-corp",
   "cross-origin-opener-policy": "same-origin",
   "cross-origin-resource-policy": "same-origin",
   "permissions-policy": "camera=(), geolocation=(), serial=()",
   "referrer-policy": "no-referrer",
   "x-content-type-options": "nosniff",
-  "x-frame-options": "DENY",
 };
 
 function assetPath(pathname) {
