@@ -29,6 +29,29 @@ HOST=0.0.0.0 PORT=4190 npm start
 
 The health check endpoint is `GET /healthz`.
 
+## Embed In An Iframe
+
+The server allows iframe embedding from any parent origin, including local
+development pages. It omits CSP `frame-ancestors` and `X-Frame-Options` while
+preserving the other security headers. Reverse proxies must not add restrictive
+`frame-ancestors` or `X-Frame-Options` headers if embedding should remain available.
+
+```html
+<iframe
+  src="https://folotoy-passport-simulator.onrender.com/?play=100"
+  title="AI Passport 在线试玩"
+  allow="microphone; autoplay; fullscreen"
+></iframe>
+```
+
+The embedding page's own CSP must also permit the simulator in `frame-src`.
+Sound still requires a user click, and microphone access requires browser
+permission in a secure context. To test before deploying community changes,
+temporarily insert the iframe in a community page using browser DevTools, or
+use a local preview page. This changes only the test browser's DOM; refreshing
+restores the original page. The deployed simulator must include this header
+change before remote embedding can work.
+
 ## Environment Variables
 
 | Variable | Default | Production recommendation | Description |
