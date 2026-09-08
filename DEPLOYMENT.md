@@ -29,6 +29,21 @@ HOST=0.0.0.0 PORT=4190 npm start
 
 The health check endpoint is `GET /healthz`.
 
+## Runtime Logs
+
+The server writes one JSON object per line to standard output or standard
+error. HTTP requests emit an `http_access` record with a request ID, method,
+path, status, response size, client address, and duration. Query strings and
+request bodies are intentionally omitted.
+
+Failures emit a separate record using the same `request_id`. Community import
+failures include the upstream stage, HTTP status, request ID, retry count, and
+`Retry-After` value when those fields are available. WebSocket upgrades and
+network bridge connection failures are logged as separate events.
+
+Reverse proxies may supply `X-Request-ID`; valid values are returned to the
+client and used in all related records. Otherwise, the server generates an ID.
+
 ## Embed In An Iframe
 
 The server allows iframe embedding from any parent origin, including local

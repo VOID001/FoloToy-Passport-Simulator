@@ -77,6 +77,10 @@ await cp(
   path.join(outputRoot, "community-import.mjs"),
 );
 await cp(
+  path.join(projectRoot, "logging.mjs"),
+  path.join(outputRoot, "logging.mjs"),
+);
+await cp(
   path.join(projectRoot, "network-bridge.mjs"),
   path.join(outputRoot, "network-bridge.mjs"),
 );

@@ -29,6 +29,7 @@ for (const { expected, filename } of checksums) {
 for (const required of [
   "server.mjs",
   "community-import.mjs",
+  "logging.mjs",
   "package.json",
   "release-manifest.json",
   "public/index.html",

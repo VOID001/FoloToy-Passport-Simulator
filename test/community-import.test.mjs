@@ -90,6 +90,7 @@ test("retries timed-out firmware downloads up to three times", async () => {
   const bytes = new Uint8Array([0xe9, 0x03, 0x02, 0x01]);
   const sha256 = createHash("sha256").update(bytes).digest("hex");
   const retryDelays = [];
+  const retryEvents = [];
   let downloadAttempts = 0;
   const fetchImpl = async (url) => {
     if (String(url).includes("/api/plays/id/71")) {
@@ -121,12 +122,27 @@ test("retries timed-out firmware downloads up to three times", async () => {
   const result = await fetchCommunityFirmware(
     "https://ai-passport.folotoy.cn/plays/71/",
     fetchImpl,
-    { retryDelay: async (delayMs) => retryDelays.push(delayMs) },
+    {
+      onRetry: (event) => retryEvents.push(event),
+      retryDelay: async (delayMs) => retryDelays.push(delayMs),
+    },
   );
 
   assert.deepEqual(result.bytes, Buffer.from(bytes));
   assert.equal(downloadAttempts, COMMUNITY_DOWNLOAD_RETRIES + 1);
   assert.deepEqual(retryDelays, [250, 500, 1000]);
+  assert.deepEqual(
+    retryEvents.map(({ attempt, delayMs, error }) => ({
+      attempt,
+      delayMs,
+      error: error.message,
+    })),
+    [
+      { attempt: 1, delayMs: 250, error: "download timed out" },
+      { attempt: 2, delayMs: 500, error: "download timed out" },
+      { attempt: 3, delayMs: 1000, error: "download timed out" },
+    ],
+  );
 });
 
 test("reports a timeout only after all firmware download retries fail", async () => {
@@ -166,6 +182,60 @@ test("reports a timeout only after all firmware download retries fail", async ()
     { name: "TimeoutError", message: "download timed out" },
   );
   assert.equal(downloadAttempts, COMMUNITY_DOWNLOAD_RETRIES + 1);
+});
+
+test("preserves upstream status and request ID after download retries fail", async () => {
+  const bytes = new Uint8Array([0xe9, 0x03, 0x02, 0x01]);
+  const sha256 = createHash("sha256").update(bytes).digest("hex");
+  const fetchImpl = async (url) => {
+    if (String(url).includes("/api/plays/id/71")) {
+      return Response.json({
+        ok: true,
+        play: {
+          slug: "answer-book",
+          status: "published",
+          title: { zh: "答案之书" },
+          firmware: {
+            available: true,
+            format: "esp-merged-0x0",
+            size: bytes.byteLength,
+            sha256,
+            url: "/api/download/official/answer-book",
+          },
+        },
+      });
+    }
+    return Response.json(
+      { detail: "操作过于频繁，请稍后再试" },
+      {
+        status: 429,
+        headers: {
+          "retry-after": "60",
+          "x-request-id": "community-request-123",
+        },
+      },
+    );
+  };
+
+  await assert.rejects(
+    fetchCommunityFirmware(
+      "https://ai-passport.folotoy.cn/plays/71/",
+      fetchImpl,
+      { retryDelay: async () => {} },
+    ),
+    (error) => {
+      assert.equal(error.status, 502);
+      assert.equal(error.attempts, COMMUNITY_DOWNLOAD_RETRIES + 1);
+      assert.deepEqual(error.details, {
+        upstream_stage: "firmware_download",
+        upstream_status: 429,
+        upstream_status_text: "",
+        upstream_request_id: "community-request-123",
+        retry_after: "60",
+      });
+      return true;
+    },
+  );
 });
 
 test("rejects firmware whose bytes do not match published SHA-256", async () => {

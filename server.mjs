@@ -8,6 +8,11 @@ import {
   CommunityImportError,
   fetchCommunityFirmware,
 } from "./community-import.mjs";
+import {
+  defaultLogger,
+  errorLogFields,
+  requestIdFrom,
+} from "./logging.mjs";
 import { attachNetworkBridge } from "./network-bridge.mjs";
 
 const HOST = process.env.HOST || "127.0.0.1";
@@ -56,6 +61,50 @@ function writeJson(response, status, payload, includeBody = true) {
   response.end(includeBody ? body : undefined);
 }
 
+function requestPath(request) {
+  try {
+    return new URL(request.url, `http://${request.headers.host || "localhost"}`)
+      .pathname;
+  } catch {
+    return "<invalid>";
+  }
+}
+
+function startAccessLog(request, response, logger) {
+  const startedAt = performance.now();
+  const requestId = requestIdFrom(request.headers["x-request-id"]);
+  const fields = {
+    request_id: requestId,
+    method: request.method,
+    path: requestPath(request),
+    http_version: request.httpVersion,
+    remote_address: request.socket.remoteAddress,
+    forwarded_for: request.headers["x-forwarded-for"],
+    user_agent: request.headers["user-agent"],
+  };
+  let finished = false;
+
+  response.setHeader("x-request-id", requestId);
+  response.once("finish", () => {
+    finished = true;
+    logger.info("http_access", {
+      ...fields,
+      status: response.statusCode,
+      response_bytes: Number(response.getHeader("content-length")) || undefined,
+      duration_ms: Math.round(performance.now() - startedAt),
+    });
+  });
+  response.once("close", () => {
+    if (finished) return;
+    logger.warn("http_request_aborted", {
+      ...fields,
+      status: response.statusCode,
+      duration_ms: Math.round(performance.now() - startedAt),
+    });
+  });
+  return requestId;
+}
+
 export function localFirmwareUploadEnabled({
   env = process.env,
   argv = process.argv,
@@ -83,7 +132,11 @@ async function readJsonRequest(request) {
   }
 }
 
-async function serveCommunityFirmware(request, response) {
+async function serveCommunityFirmware(request, response, {
+  communityFirmwareFetcher,
+  logger,
+  requestId,
+}) {
   if (request.method !== "POST") {
     response.writeHead(405, { ...securityHeaders, allow: "POST" });
     response.end();
@@ -92,7 +145,16 @@ async function serveCommunityFirmware(request, response) {
 
   try {
     const payload = await readJsonRequest(request);
-    const firmware = await fetchCommunityFirmware(payload?.url);
+    const firmware = await communityFirmwareFetcher(payload?.url, undefined, {
+      onRetry: ({ attempt, delayMs, error }) => {
+        logger.warn("community_firmware_retry", {
+          request_id: requestId,
+          attempt,
+          retry_delay_ms: delayMs,
+          ...errorLogFields(error),
+        });
+      },
+    });
     response.writeHead(200, {
       ...securityHeaders,
       "cache-control": "no-store",
@@ -103,14 +165,25 @@ async function serveCommunityFirmware(request, response) {
       "x-firmware-slug": encodeURIComponent(firmware.slug),
     });
     response.end(firmware.bytes);
+    logger.info("community_firmware_imported", {
+      request_id: requestId,
+      firmware_slug: firmware.slug,
+      firmware_sha256: firmware.sha256,
+      firmware_bytes: firmware.bytes.byteLength,
+    });
   } catch (error) {
     const timedOut = error?.name === "TimeoutError" || error?.name === "AbortError";
     const status = error instanceof CommunityImportError
       ? error.status
       : timedOut ? 504 : 502;
-    if (!(error instanceof CommunityImportError) && !timedOut) {
-      console.error("Community firmware import failed:", error);
-    }
+    const log = status >= 500 ? logger.error : logger.warn;
+    log("community_firmware_import_failed", {
+      request_id: requestId,
+      response_status: status,
+      ...errorLogFields(error, {
+        includeStack: !(error instanceof CommunityImportError) && !timedOut,
+      }),
+    });
     writeJson(response, status, {
       error: timedOut
         ? "FoloToy 社区请求超时"
@@ -121,7 +194,12 @@ async function serveCommunityFirmware(request, response) {
   }
 }
 
-async function serve(request, response, runtimeConfig) {
+async function serve(request, response, {
+  communityFirmwareFetcher,
+  logger,
+  requestId,
+  runtimeConfig,
+}) {
   const requestUrl = new URL(request.url, `http://${request.headers.host}`);
   if (requestUrl.pathname === "/healthz") {
     if (!["GET", "HEAD"].includes(request.method)) {
@@ -149,7 +227,11 @@ async function serve(request, response, runtimeConfig) {
     return;
   }
   if (requestUrl.pathname === "/api/community-firmware") {
-    await serveCommunityFirmware(request, response);
+    await serveCommunityFirmware(request, response, {
+      communityFirmwareFetcher,
+      logger,
+      requestId,
+    });
     return;
   }
 
@@ -178,26 +260,90 @@ async function serve(request, response, runtimeConfig) {
       response.end();
       return;
     }
-    createReadStream(filename).pipe(response);
-  } catch {
-    response.writeHead(404, securityHeaders);
-    response.end("Not found");
+    const stream = createReadStream(filename);
+    stream.on("error", (error) => {
+      logger.error("static_asset_stream_failed", {
+        request_id: requestId,
+        path: requestUrl.pathname,
+        ...errorLogFields(error, { includeStack: true }),
+      });
+      response.destroy(error);
+    });
+    stream.pipe(response);
+  } catch (error) {
+    if (error?.code === "ENOENT" || error?.code === "ENOTDIR") {
+      response.writeHead(404, securityHeaders);
+      response.end("Not found");
+      return;
+    }
+    logger.error("static_asset_read_failed", {
+      request_id: requestId,
+      path: requestUrl.pathname,
+      ...errorLogFields(error, { includeStack: true }),
+    });
+    response.writeHead(500, securityHeaders);
+    response.end("Internal server error");
   }
 }
 
 export function createAppServer(options = {}) {
+  const logger = options.logger ?? defaultLogger;
   const runtimeConfig = Object.freeze({
     allowLocalFirmwareUpload:
       options.allowLocalFirmwareUpload ?? localFirmwareUploadEnabled(),
   });
-  const server = http.createServer(
-    (request, response) => serve(request, response, runtimeConfig),
-  );
-  return attachNetworkBridge(server, options.networkBridge);
+  const communityFirmwareFetcher =
+    options.communityFirmwareFetcher ?? fetchCommunityFirmware;
+  const server = http.createServer((request, response) => {
+    const requestId = startAccessLog(request, response, logger);
+    serve(request, response, {
+      communityFirmwareFetcher,
+      logger,
+      requestId,
+      runtimeConfig,
+    }).catch((error) => {
+      logger.error("http_request_failed", {
+        request_id: requestId,
+        method: request.method,
+        path: requestPath(request),
+        ...errorLogFields(error, { includeStack: true }),
+      });
+      if (!response.headersSent) {
+        writeJson(response, 500, { error: "服务器内部错误" });
+      } else {
+        response.destroy(error);
+      }
+    });
+  });
+  server.on("clientError", (error, socket) => {
+    logger.warn("http_client_error", {
+      remote_address: socket.remoteAddress,
+      ...errorLogFields(error),
+    });
+    if (socket.writable) {
+      socket.end("HTTP/1.1 400 Bad Request\r\nConnection: close\r\n\r\n");
+    }
+  });
+  return attachNetworkBridge(server, {
+    ...options.networkBridge,
+    logger,
+  });
 }
 
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
-  createAppServer().listen(PORT, HOST, () => {
-    console.log(`AI Passport WASM emulator: http://${HOST}:${PORT}`);
+  const server = createAppServer();
+  server.on("error", (error) => {
+    defaultLogger.error("server_error", {
+      host: HOST,
+      port: PORT,
+      ...errorLogFields(error, { includeStack: true }),
+    });
+  });
+  server.listen(PORT, HOST, () => {
+    defaultLogger.info("server_started", {
+      host: HOST,
+      port: PORT,
+      url: `http://${HOST}:${PORT}`,
+    });
   });
 }

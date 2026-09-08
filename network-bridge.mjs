@@ -4,6 +4,11 @@ import dns from "node:dns";
 import net from "node:net";
 
 import {
+  defaultLogger,
+  errorLogFields,
+  requestIdFrom,
+} from "./logging.mjs";
+import {
   ETHER_TYPE_ARP,
   GATEWAY_IP,
   IP_PROTOCOL_ICMP,
@@ -37,6 +42,10 @@ const MAX_RETRANSMITS = 5;
 const MAX_WEBSOCKET_PAYLOAD = 2048;
 const MAX_WEBSOCKET_SESSIONS = 8;
 const WEBSOCKET_GUID = "258EAFA5-E914-47DA-95CA-C5AB0DC85B11";
+const noOpLogger = Object.freeze({
+  info() {},
+  warn() {},
+});
 
 function sameIp(left, right) {
   return left.every((value, index) => value === right[index]);
@@ -288,8 +297,25 @@ export class EthernetNatSession {
   constructor(options) {
     this.sendFrame = options.sendFrame;
     this.eventSink = options.emitEvent ?? (() => {});
+    this.logger = options.logger ?? noOpLogger;
+    this.sessionId = options.sessionId;
     this.debugEnabled = Boolean(options.debugEnabled);
     this.emitEvent = (event) => {
+      if (event.event === "connection-error") {
+        this.logger.warn("network_bridge_connection_failed", {
+          session_id: this.sessionId,
+          protocol: event.protocol,
+          target: event.target,
+          reason: event.message,
+        });
+      } else if (event.event === "connection-blocked") {
+        this.logger.warn("network_bridge_connection_blocked", {
+          session_id: this.sessionId,
+          protocol: event.protocol,
+          target: event.target,
+          reason: event.message,
+        });
+      }
       if (this.debugEnabled) this.eventSink(event);
     };
     this.allowPrivate = options.allowPrivate ?? false;
@@ -501,13 +527,17 @@ class WebSocketPeer {
     this.onBinary = () => {};
     this.onText = () => {};
     this.onClose = () => {};
+    this.onError = () => {};
     this.closed = false;
     socket.on("data", (chunk) => {
       this.buffer = Buffer.concat([this.buffer, chunk]);
       this.#parse();
     });
     socket.on("close", () => this.#closed());
-    socket.on("error", () => this.#closed());
+    socket.on("error", (error) => {
+      this.onError(error);
+      this.#closed();
+    });
   }
 
   start() {
@@ -597,20 +627,47 @@ function originMatchesHost(request) {
 export function attachNetworkBridge(server, options = {}) {
   const allowPrivate = options.allowPrivate ??
     process.env.EMULATOR_NETWORK_ALLOW_PRIVATE === "1";
+  const logger = options.logger ?? defaultLogger;
   const sessions = new Set();
   server.on("upgrade", (request, socket, head) => {
+    const startedAt = performance.now();
+    const requestId = requestIdFrom(request.headers["x-request-id"]);
+    const accessFields = {
+      request_id: requestId,
+      method: request.method,
+      path: "<invalid>",
+      remote_address: request.socket.remoteAddress,
+      forwarded_for: request.headers["x-forwarded-for"],
+      user_agent: request.headers["user-agent"],
+    };
+    const rejectUpgrade = (status, reason) => {
+      logger.warn("websocket_access", {
+        ...accessFields,
+        status,
+        reason,
+        duration_ms: Math.round(performance.now() - startedAt),
+      });
+    };
     let requestUrl;
     try {
       requestUrl = new URL(request.url, `http://${request.headers.host}`);
-    } catch {
+      accessFields.path = requestUrl.pathname;
+    } catch (error) {
+      rejectUpgrade(400, "invalid_url");
+      logger.warn("websocket_upgrade_failed", {
+        request_id: requestId,
+        ...errorLogFields(error),
+      });
       socket.destroy();
       return;
     }
     if (requestUrl.pathname !== "/api/emulator-network") {
+      rejectUpgrade(404, "unknown_path");
       socket.destroy();
       return;
     }
     if (sessions.size >= MAX_WEBSOCKET_SESSIONS) {
+      rejectUpgrade(503, "session_limit");
       socket.write("HTTP/1.1 503 Service Unavailable\r\nConnection: close\r\n\r\n");
       socket.destroy();
       return;
@@ -623,6 +680,7 @@ export function attachNetworkBridge(server, options = {}) {
       typeof key !== "string" ||
       !originMatchesHost(request)
     ) {
+      rejectUpgrade(403, "invalid_handshake");
       socket.write("HTTP/1.1 403 Forbidden\r\nConnection: close\r\n\r\n");
       socket.destroy();
       return;
@@ -636,13 +694,21 @@ export function attachNetworkBridge(server, options = {}) {
       "Upgrade: websocket",
       "Connection: Upgrade",
       `Sec-WebSocket-Accept: ${accept}`,
+      `X-Request-ID: ${requestId}`,
       "\r\n",
     ].join("\r\n"));
+    logger.info("websocket_access", {
+      ...accessFields,
+      status: 101,
+      duration_ms: Math.round(performance.now() - startedAt),
+    });
 
     const peer = new WebSocketPeer(socket, head);
     const session = new EthernetNatSession({
       ...options,
       allowPrivate,
+      logger,
+      sessionId: requestId,
       sendFrame: (frame) => peer.sendBinary(frame),
       emitEvent: (event) => peer.sendJson(event),
     });
@@ -657,9 +723,19 @@ export function attachNetworkBridge(server, options = {}) {
         peer.close();
       }
     };
+    peer.onError = (error) => {
+      logger.warn("network_bridge_socket_error", {
+        session_id: requestId,
+        ...errorLogFields(error),
+      });
+    };
     peer.onClose = () => {
       session.close();
       sessions.delete(session);
+      logger.info("network_bridge_session_closed", {
+        session_id: requestId,
+        duration_ms: Math.round(performance.now() - startedAt),
+      });
     };
     sessions.add(session);
     peer.start();

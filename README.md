@@ -146,6 +146,7 @@ docker run --rm -p 4190:4190 ai-passport-emulator
 - `public/`：页面、样式和浏览器端运行代码
 - `public/wasm/`：ESP-EMU WASM 和开发板外设模拟
 - `server.mjs`：静态资源、社区固件接口和健康检查
+- `logging.mjs`：结构化运行日志、请求 ID 和错误字段
 - `network-bridge.mjs`：虚拟 Wi-Fi 网络桥
 - `test/`：Node.js 单元测试
 - `tools/`：构建和发布校验脚本
