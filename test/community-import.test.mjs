@@ -3,10 +3,16 @@ import { createHash } from "node:crypto";
 import test from "node:test";
 
 import {
+  COMMUNITY_ORIGIN,
   CommunityImportError,
   fetchCommunityFirmware,
   parseCommunityPlayUrl,
 } from "../community-import.mjs";
+import { COMMUNITY_ORIGIN as PUBLIC_COMMUNITY_ORIGIN } from "../public/firmware.js";
+
+test("shares the community origin with the browser URL resolver", () => {
+  assert.equal(COMMUNITY_ORIGIN, PUBLIC_COMMUNITY_ORIGIN);
+});
 
 test("parses supported FoloToy community detail URLs", () => {
   assert.deepEqual(

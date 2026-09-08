@@ -1,11 +1,23 @@
 export const MAX_FIRMWARE_BYTES = 8 * 1024 * 1024;
 export const DEFAULT_FIRMWARE_PRESET_ID = "official-demo";
+export const COMMUNITY_ORIGIN = "https://ai-passport.folotoy.cn";
 export const FIRMWARE_PRESET_IDS_BY_URL_ID = Object.freeze({
   1: "music-keychain",
   2: "answer-book",
   3: DEFAULT_FIRMWARE_PRESET_ID,
   4: "feishu-calendar-assistant",
 });
+
+export function resolveCommunityPlayUrl(search) {
+  const parameters = new URLSearchParams(search);
+  if (!parameters.has("play")) return null;
+
+  const playId = parameters.get("play");
+  if (!/^[1-9]\d*$/.test(playId || "")) {
+    throw new Error("URL 参数 play 必须是正整数玩法 ID");
+  }
+  return `${COMMUNITY_ORIGIN}/plays/${playId}/`;
+}
 
 export function resolveFirmwarePresetId(
   search,

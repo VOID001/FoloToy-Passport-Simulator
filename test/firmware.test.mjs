@@ -6,6 +6,7 @@ import {
   FIRMWARE_PRESET_IDS_BY_URL_ID,
   MAX_FIRMWARE_BYTES,
   formatFirmwareSize,
+  resolveCommunityPlayUrl,
   resolveFirmwarePresetId,
   validateFirmwareFile,
 } from "../public/firmware.js";
@@ -43,6 +44,34 @@ test("uses the official demo unless the URL ID is exactly 1 through 4", () => {
     assert.equal(
       resolveFirmwarePresetId(search, availablePresetIds),
       DEFAULT_FIRMWARE_PRESET_ID,
+    );
+  }
+});
+
+test("resolves a community play ID from the URL", () => {
+  assert.equal(
+    resolveCommunityPlayUrl("?play=100"),
+    "https://ai-passport.folotoy.cn/plays/100/",
+  );
+  assert.equal(
+    resolveCommunityPlayUrl("?debug=network&play=71&id=1"),
+    "https://ai-passport.folotoy.cn/plays/71/",
+  );
+  assert.equal(resolveCommunityPlayUrl("?id=1"), null);
+});
+
+test("rejects invalid community play IDs from the URL", () => {
+  for (const search of [
+    "?play=",
+    "?play=0",
+    "?play=-1",
+    "?play=1.5",
+    "?play=001",
+    "?play=answer-book",
+  ]) {
+    assert.throws(
+      () => resolveCommunityPlayUrl(search),
+      /play 必须是正整数玩法 ID/,
     );
   }
 });

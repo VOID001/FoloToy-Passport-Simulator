@@ -1,9 +1,12 @@
 import { Buffer } from "node:buffer";
 import { createHash } from "node:crypto";
 
-import { MAX_FIRMWARE_BYTES } from "./public/firmware.js";
+import {
+  COMMUNITY_ORIGIN,
+  MAX_FIRMWARE_BYTES,
+} from "./public/firmware.js";
 
-export const COMMUNITY_ORIGIN = "https://ai-passport.folotoy.cn";
+export { COMMUNITY_ORIGIN };
 
 export class CommunityImportError extends Error {
   constructor(message, status = 400) {

@@ -2,6 +2,7 @@ import { QemuRuntime } from "./runtime.js";
 import { BrowserAudio } from "./audio.js";
 import {
   formatFirmwareSize,
+  resolveCommunityPlayUrl,
   resolveFirmwarePresetId,
   validateFirmwareFile,
 } from "./firmware.js";
@@ -877,6 +878,23 @@ renderPresetStates();
 async function startApplication() {
   await configureFirmwareSources();
   showSimulatorNoticeOnce(simulatorNotice);
+  try {
+    const initialCommunityPlayUrl = resolveCommunityPlayUrl(window.location.search);
+    if (initialCommunityPlayUrl) {
+      selectFirmwareSource("community");
+      communityPlayUrl.value = initialCommunityPlayUrl;
+      await importCommunityFirmware();
+      return;
+    }
+  } catch (error) {
+    selectFirmwareSource("community");
+    uploadError.textContent = error.message;
+    presetFeedback.textContent = `社区固件导入失败：${error.message}`;
+    log(`社区固件导入失败：${error.message}`);
+    if (!firmwareGuidance.open) firmwareGuidance.showModal();
+    return;
+  }
+
   runtime.start(initialPresetButton.dataset.firmwareUrl).catch((error) => {
     setUploadBusy(false);
     setRuntimeState("waiting", "等待 WASM QEMU");

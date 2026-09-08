@@ -85,6 +85,14 @@ HOST=0.0.0.0 PORT=4190 npm start
 点击“上传固件”可选择本地 `.bin` 文件，或粘贴
 `https://ai-passport.folotoy.cn/plays/` 下的玩法详情链接。
 
+也可以通过模拟器 URL 的 `play` 参数直接加载已发布的社区玩法，例如：
+
+```text
+http://127.0.0.1:4190/?play=100
+```
+
+页面会自动拉取玩法 100 的社区 Full Flash 镜像，完成校验后直接运行。
+
 本地开发命令 `npm start` 会启用本地文件入口。`dist/` 发布包和 Docker
 镜像默认关闭该入口，只允许从 FoloToy 社区加载经过服务端校验的固件。
 
