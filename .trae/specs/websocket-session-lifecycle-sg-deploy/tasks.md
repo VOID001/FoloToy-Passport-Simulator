@@ -80,7 +80,7 @@
   - TR-4.3：推送后 `git rev-parse HEAD` 与 `git ls-remote origin refs/heads/fix/websocket-session-lifecycle` 均为 `19d5e648664d10bdc910852cc30d79a24b9e9c3d`。
 
 ## Task 5：将修复 commit 部署到 SG 并验证
-- **Status**：`in_progress`
+- **Status**：`completed`
 - **Priority**：high
 - **Depends On**：Task 4
 - **Description**：
@@ -94,3 +94,9 @@
   - `rule` TR-5.3：新实例日志包含活动会话数和上限；受控失活连接可被回收。
   - `rule` TR-5.4：Oregon 服务最新部署记录未因本任务变化。
   - `rubric` TR-5.5：生产验证质量；1 = 只看到部署成功，3 = 有健康检查但无生命周期证据，5 = commit、区域、健康、握手、回收日志和非目标服务状态均有证据；阈值 >= 4；证据为 Render CLI、HTTP 和日志输出。
+- **Completion Evidence**：
+  - TR-5.1：SG 部署 `dep-dagfv7f40ujc73f1olp0` 状态为 `live`，运行 commit `6ea4b0f684ea6da185cdc091e2e266a9c9116fa1`。
+  - TR-5.2：`https://folotoy-passport-simulator-sg.onrender.com/healthz` 返回 HTTP 200；受控探针 WebSocket 握手返回 101。
+  - TR-5.3：失活探针会话 `3656f38b-a113-4600-bd6c-be009fe2b342` 在 60003ms 后记录 `heartbeat_type=application`、`reason=heartbeat_timeout`，活动数从 2 降至 1；健康探针回复 2 次应用 ACK 并保持连接 70 秒。
+  - TR-5.4：Oregon 服务仍运行部署 `dep-dagc2iuk1f9s73aos4q0` 和原 commit `250db1dda8baea21d112dba5226745e4d733226d`。
+  - TR-5.5：5/5。已核对 commit、Singapore 区域、健康检查、握手、代理控制帧行为、端到端应用心跳回收、健康会话续租和 Oregon 未变更。
