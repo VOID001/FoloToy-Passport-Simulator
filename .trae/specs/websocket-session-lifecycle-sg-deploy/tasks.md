@@ -62,7 +62,7 @@
   - TR-3.4：5/5。退避函数纯函数可测，具备指数增长、抖动、30 秒上限、成功重置和停止取消语义。
 
 ## Task 4：全量验证、提交并推送独立分支
-- **Status**：`in_progress`
+- **Status**：`completed`
 - **Priority**：high
 - **Depends On**：Task 2、Task 3
 - **Description**：
@@ -74,9 +74,13 @@
   - `rule` TR-4.1：`npm test`、`npm run build`、`npm run verify:release` 全部通过。
   - `rule` TR-4.2：提交只包含规格、WebSocket 生命周期、客户端退避、测试和文档相关文件。
   - `rule` TR-4.3：`origin/fix/websocket-session-lifecycle` 指向本地 HEAD。
+- **Completion Evidence**：
+  - TR-4.1：`npm test` 75/75 通过；`npm run build` 生成 41 个文件；`npm run verify:release` 通过 40 项校验。
+  - TR-4.2：提交 `19d5e648664d10bdc910852cc30d79a24b9e9c3d` 仅包含两份规格、`DEPLOYMENT.md`、服务端桥、客户端桥和对应网络测试。
+  - TR-4.3：推送后 `git rev-parse HEAD` 与 `git ls-remote origin refs/heads/fix/websocket-session-lifecycle` 均为 `19d5e648664d10bdc910852cc30d79a24b9e9c3d`。
 
 ## Task 5：将修复 commit 部署到 SG 并验证
-- **Status**：`pending`
+- **Status**：`in_progress`
 - **Priority**：high
 - **Depends On**：Task 4
 - **Description**：
