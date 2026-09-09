@@ -672,6 +672,8 @@ export function attachNetworkBridge(server, options = {}) {
   const heartbeatMs = options.heartbeatMs ?? runtimeOptions.heartbeatMs;
   const maxSessions = options.maxSessions ?? runtimeOptions.maxSessions;
   const logger = options.logger ?? defaultLogger;
+  const setHeartbeatInterval = options.setIntervalFn ?? setInterval;
+  const clearHeartbeatInterval = options.clearIntervalFn ?? clearInterval;
   const sessions = new Set();
   server.on("close", () => {
     for (const entry of sessions) entry.peer.terminate("server_close");
@@ -681,6 +683,7 @@ export function attachNetworkBridge(server, options = {}) {
     const requestId = requestIdFrom(request.headers["x-request-id"]);
     const accessFields = {
       request_id: requestId,
+      session_id: requestId,
       method: request.method,
       path: "<invalid>",
       remote_address: request.socket.remoteAddress,
@@ -785,7 +788,7 @@ export function attachNetworkBridge(server, options = {}) {
       });
     };
     peer.onClose = (reason) => {
-      clearInterval(entry.heartbeatTimer);
+      clearHeartbeatInterval(entry.heartbeatTimer);
       session.close();
       sessions.delete(entry);
       logger.info("network_bridge_session_closed", {
@@ -806,7 +809,7 @@ export function attachNetworkBridge(server, options = {}) {
       heartbeat_ms: heartbeatMs,
       duration_ms: Math.round(performance.now() - startedAt),
     });
-    entry.heartbeatTimer = setInterval(() => {
+    entry.heartbeatTimer = setHeartbeatInterval(() => {
       if (pendingHeartbeat !== null) {
         logger.warn("network_bridge_session_expired", {
           session_id: requestId,

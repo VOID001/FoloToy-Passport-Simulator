@@ -322,6 +322,7 @@ test("reclaims unresponsive WebSocket sessions and releases capacity", async () 
     (record) => record.request_id === "session-rejected",
   );
   assert.equal(capacityLog.event, "websocket_access");
+  assert.equal(capacityLog.session_id, "session-rejected");
   assert.equal(capacityLog.status, 503);
   assert.equal(capacityLog.reason, "session_limit");
   assert.equal(capacityLog.active_sessions, 8);
@@ -384,6 +385,53 @@ test("keeps WebSocket sessions alive when clients answer application heartbeats"
 
   socket.destroy();
   server.emit("close");
+});
+
+test("clears the heartbeat interval exactly once when a session closes", () => {
+  const server = new EventEmitter();
+  const { logger, records } = captureLogger();
+  const timers = [];
+  const socket = new FakeUpgradeSocket();
+  attachNetworkBridge(server, {
+    heartbeatMs: 10,
+    logger,
+    setIntervalFn(callback, delayMs) {
+      const timer = {
+        callback,
+        clearCount: 0,
+        cleared: false,
+        delayMs,
+        unref() {},
+      };
+      timers.push(timer);
+      return timer;
+    },
+    clearIntervalFn(timer) {
+      timer.clearCount += 1;
+      timer.cleared = true;
+    },
+  });
+  upgrade(server, socket, "session-timer-cleanup");
+  assert.equal(timers.length, 1);
+  assert.equal(timers[0].delayMs, 10);
+
+  timers[0].callback();
+  const writesBeforeClose = socket.writes.length;
+  socket.destroy();
+  assert.equal(timers[0].clearCount, 1);
+
+  if (!timers[0].cleared) timers[0].callback();
+  assert.equal(socket.writes.length, writesBeforeClose);
+  assert.equal(
+    records.filter((record) => record.event === "network_bridge_session_expired").length,
+    0,
+  );
+  assert.equal(
+    records.filter((record) => record.event === "network_bridge_session_closed").length,
+    1,
+  );
+  server.emit("close");
+  assert.equal(timers[0].clearCount, 1);
 });
 
 test("answers ARP requests for the emulated gateway", () => {
