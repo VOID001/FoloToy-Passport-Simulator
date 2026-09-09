@@ -43,7 +43,9 @@ network bridge connection failures are logged as separate events. WebSocket
 acceptance and rejection records include `active_sessions`, `max_sessions`, and
 `session_id`. Session close records additionally include `reason` and
 `duration_ms`; unresponsive clients first emit
-`network_bridge_session_expired` with `reason=heartbeat_timeout`.
+`network_bridge_session_expired` with `reason=heartbeat_timeout`. The bridge
+sends both a WebSocket Ping and an application heartbeat because reverse proxies
+can answer control-frame Pings without proving that the browser is still alive.
 
 Reverse proxies may supply `X-Request-ID`; valid values are returned to the
 client and used in all related records. Otherwise, the server generates an ID.
@@ -80,7 +82,7 @@ change before remote embedding can work.
 | `EMULATOR_ALLOW_LOCAL_FIRMWARE_UPLOAD` | Disabled | `0` | Set to `1` only when users should be able to select arbitrary local `.bin` files. |
 | `EMULATOR_NETWORK_ALLOW_PRIVATE` | Disabled | `0` | Set to `1` only in a trusted environment to allow emulated firmware to reach private, loopback, and reserved addresses. |
 | `EMULATOR_NETWORK_MAX_SESSIONS` | `16` | Tune for the instance size | Maximum concurrent emulator WebSocket sessions. Valid range: 1-256. |
-| `EMULATOR_NETWORK_HEARTBEAT_MS` | `30000` | `30000` | WebSocket Ping interval in milliseconds. Valid range: 1000-600000; an unanswered Ping is terminated at the next interval. |
+| `EMULATOR_NETWORK_HEARTBEAT_MS` | `30000` | `30000` | WebSocket and application heartbeat interval in milliseconds. Valid range: 1000-600000; an unanswered application heartbeat is terminated at the next interval. |
 
 Environment variables take precedence over command-line defaults. The source
 development command, `npm start`, passes `--allow-local-firmware-upload`.

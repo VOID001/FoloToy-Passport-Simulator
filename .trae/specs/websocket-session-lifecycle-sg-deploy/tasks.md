@@ -6,20 +6,20 @@
 - **Depends On**：None
 - **Description**：
   - 从当前 `origin/main` 创建 `fix/websocket-session-lifecycle`，保留但不暂存无关工作区文件。
-  - 为自实现 WebSocket Peer 增加 Ping、Pong 识别和强制终止能力。
-  - 为每个会话维护心跳状态；未在期限内返回 Pong 时终止连接并执行一次幂等清理。
+  - 为自实现 WebSocket Peer 增加 Ping、Pong 识别、应用层心跳和强制终止能力。
+  - 为每个会话维护心跳状态；未在期限内返回应用层 ACK 时终止连接并执行一次幂等清理。
   - 在关闭路径清理心跳 Timer 和 NAT 会话。
 - **Acceptance Criteria Addressed**：AC-1、AC-2、AC-5、AC-7
 - **Test Requirements**：
-  - `rule` TR-1.1：不响应 Ping 的 Fake Socket 在两个检查周期内被销毁，会话关闭回调只执行一次，新连接随后成功。
-  - `rule` TR-1.2：按期返回 Pong 的 Fake Socket 经过两个周期仍保持连接，无超时日志。
+  - `rule` TR-1.1：只响应控制帧 Pong、不响应应用层心跳的 Fake Socket 在两个检查周期内被销毁，会话关闭回调只执行一次，新连接随后成功。
+  - `rule` TR-1.2：按期返回应用层 ACK 的 Fake Socket 经过两个周期仍保持连接，无超时日志。
   - `rule` TR-1.3：关闭会话后 Timer 不再触发，测试进程可正常退出。
   - `rubric` TR-1.4：生命周期实现质量；1 = 依赖单一 close 事件，3 = 有超时但清理分散，5 = 标准控制帧、单一幂等关闭路径、Timer 与 NAT 资源完整释放；阈值 >= 4；证据为实现和测试。
 - **Completion Evidence**：
-  - TR-1.1：`node --test test/network.test.mjs` 通过；8 个不响应 Ping 的连接均触发 `heartbeat_timeout`，替代连接随后返回 101。
-  - TR-1.2：Fake Socket 自动返回标准 masked Pong，经过多个心跳周期仍未被销毁且无超时事件。
+  - TR-1.1：`node --test test/network.test.mjs` 通过；8 个仅响应控制帧 Pong、不响应应用层心跳的连接均触发 `heartbeat_timeout`，替代连接随后返回 101。
+  - TR-1.2：Fake Socket 返回标准 masked Pong 和匹配序号的应用层 ACK，经过多个心跳周期仍未被销毁且无超时事件。
   - TR-1.3：Peer 的 `closed` 守卫保证关闭回调只执行一次；关闭时清除 interval，聚焦测试正常退出。
-  - TR-1.4：5/5。实现使用标准 Ping/Pong 控制帧、集中 `onClose` 清理、服务关闭兜底终止以及不保持进程存活的 Timer。
+  - TR-1.4：5/5。实现使用标准 Ping/Pong 和端到端应用心跳、集中 `onClose` 清理、服务关闭兜底终止以及不保持进程存活的 Timer。
 
 ## Task 2：增加容量配置和结构化调试字段
 - **Status**：`completed`

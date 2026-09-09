@@ -104,6 +104,13 @@ export class EmulatorNetworkBridge {
       if (typeof event.data === "string") {
         try {
           const detail = JSON.parse(event.data);
+          if (detail.type === "network-heartbeat") {
+            socket.send(JSON.stringify({
+              type: "network-heartbeat-ack",
+              id: detail.id,
+            }));
+            return;
+          }
           if (this.debugEnabled || detail.event === "bridge-ready") {
             this.onEvent(detail);
           }

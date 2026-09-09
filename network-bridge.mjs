@@ -578,7 +578,7 @@ class WebSocketPeer {
   }
 
   sendJson(payload) {
-    this.#sendFrame(0x01, Buffer.from(JSON.stringify(payload)));
+    return this.#sendFrame(0x01, Buffer.from(JSON.stringify(payload)));
   }
 
   ping() {
@@ -760,13 +760,19 @@ export function attachNetworkBridge(server, options = {}) {
       peer,
       session,
     };
-    let awaitingPong = false;
+    let heartbeatSequence = 0;
+    let pendingHeartbeat = null;
     peer.onBinary = (frame) => session.receive(frame);
     peer.onText = (text) => {
       try {
         const message = JSON.parse(text);
         if (message.type === "network-debug") {
           session.setDebugEnabled(message.enabled);
+        } else if (
+          message.type === "network-heartbeat-ack" &&
+          message.id === pendingHeartbeat
+        ) {
+          pendingHeartbeat = null;
         }
       } catch {
         peer.close();
@@ -777,9 +783,6 @@ export function attachNetworkBridge(server, options = {}) {
         session_id: requestId,
         ...errorLogFields(error),
       });
-    };
-    peer.onPong = () => {
-      awaitingPong = false;
     };
     peer.onClose = (reason) => {
       clearInterval(entry.heartbeatTimer);
@@ -804,10 +807,12 @@ export function attachNetworkBridge(server, options = {}) {
       duration_ms: Math.round(performance.now() - startedAt),
     });
     entry.heartbeatTimer = setInterval(() => {
-      if (awaitingPong) {
+      if (pendingHeartbeat !== null) {
         logger.warn("network_bridge_session_expired", {
           session_id: requestId,
           reason: "heartbeat_timeout",
+          heartbeat_id: pendingHeartbeat,
+          heartbeat_type: "application",
           active_sessions: sessions.size,
           max_sessions: maxSessions,
           heartbeat_ms: heartbeatMs,
@@ -815,8 +820,14 @@ export function attachNetworkBridge(server, options = {}) {
         peer.terminate("heartbeat_timeout");
         return;
       }
-      awaitingPong = true;
-      if (!peer.ping()) peer.terminate("socket_unwritable");
+      heartbeatSequence += 1;
+      pendingHeartbeat = heartbeatSequence;
+      if (
+        !peer.ping() ||
+        !peer.sendJson({ type: "network-heartbeat", id: pendingHeartbeat })
+      ) {
+        peer.terminate("socket_unwritable");
+      }
     }, heartbeatMs);
     entry.heartbeatTimer.unref?.();
     peer.start();

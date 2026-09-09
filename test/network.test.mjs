@@ -40,9 +40,25 @@ function wait(milliseconds) {
   return new Promise((resolve) => setTimeout(resolve, milliseconds));
 }
 
+function maskedClientFrame(opcode, payload = Buffer.alloc(0)) {
+  const data = Buffer.from(payload);
+  assert.ok(data.byteLength < 126);
+  const mask = Buffer.from([1, 2, 3, 4]);
+  const masked = Buffer.from(data);
+  for (let index = 0; index < masked.byteLength; index += 1) {
+    masked[index] ^= mask[index % 4];
+  }
+  return Buffer.concat([
+    Buffer.from([0x80 | opcode, 0x80 | data.byteLength]),
+    mask,
+    masked,
+  ]);
+}
+
 class FakeUpgradeSocket extends EventEmitter {
-  constructor({ respondToPing = false } = {}) {
+  constructor({ respondToHeartbeat = false, respondToPing = false } = {}) {
     super();
+    this.respondToHeartbeat = respondToHeartbeat;
     this.respondToPing = respondToPing;
     this.destroyed = false;
     this.ended = false;
@@ -56,9 +72,30 @@ class FakeUpgradeSocket extends EventEmitter {
     if (this.respondToPing && bytes[0] === 0x89) {
       queueMicrotask(() => {
         if (!this.destroyed) {
-          this.emit("data", Buffer.from([0x8a, 0x80, 1, 2, 3, 4]));
+          this.emit("data", maskedClientFrame(0x0a));
         }
       });
+    }
+    if (this.respondToHeartbeat && bytes[0] === 0x81) {
+      const length = bytes[1] & 0x7f;
+      const offset = length === 126 ? 4 : 2;
+      const payloadLength = length === 126 ? bytes.readUInt16BE(2) : length;
+      const message = JSON.parse(
+        bytes.subarray(offset, offset + payloadLength).toString("utf8"),
+      );
+      if (message.type === "network-heartbeat") {
+        queueMicrotask(() => {
+          if (!this.destroyed) {
+            this.emit("data", maskedClientFrame(
+              0x01,
+              JSON.stringify({
+                type: "network-heartbeat-ack",
+                id: message.id,
+              }),
+            ));
+          }
+        });
+      }
     }
     return true;
   }
@@ -180,6 +217,7 @@ test("resets reconnect backoff after success and cancels it when stopped", () =>
     constructor() {
       this.listeners = new Map();
       this.readyState = 0;
+      this.sent = [];
       FakeWebSocket.instances.push(this);
     }
 
@@ -187,11 +225,13 @@ test("resets reconnect backoff after success and cancels it when stopped", () =>
       this.listeners.set(type, listener);
     }
 
-    emit(type) {
-      this.listeners.get(type)?.({});
+    emit(type, event = {}) {
+      this.listeners.get(type)?.(event);
     }
 
-    send() {}
+    send(data) {
+      this.sent.push(data);
+    }
 
     close() {
       this.readyState = 3;
@@ -227,6 +267,13 @@ test("resets reconnect backoff after success and cancels it when stopped", () =>
   scheduled[1].callback();
   FakeWebSocket.instances[2].readyState = FakeWebSocket.OPEN;
   FakeWebSocket.instances[2].emit("open");
+  FakeWebSocket.instances[2].emit("message", {
+    data: JSON.stringify({ type: "network-heartbeat", id: 7 }),
+  });
+  assert.deepEqual(
+    JSON.parse(FakeWebSocket.instances[2].sent.at(-1)),
+    { type: "network-heartbeat-ack", id: 7 },
+  );
   FakeWebSocket.instances[2].emit("close");
   assert.equal(scheduled[2].delayMs, 1000);
 
@@ -263,7 +310,7 @@ test("reclaims unresponsive WebSocket sessions and releases capacity", async () 
   attachNetworkBridge(server, { heartbeatMs: 10, logger, maxSessions: 8 });
   const sockets = Array.from(
     { length: 8 },
-    (_, index) => new FakeUpgradeSocket(),
+    (_, index) => new FakeUpgradeSocket({ respondToPing: true }),
   );
   sockets.forEach((socket, index) => upgrade(server, socket, `session-${index}`));
   assert.ok(sockets.every((socket) => responseStatus(socket) === "101"));
@@ -317,10 +364,13 @@ test("reclaims unresponsive WebSocket sessions and releases capacity", async () 
   ));
 });
 
-test("keeps WebSocket sessions alive when clients answer heartbeat pings", async () => {
+test("keeps WebSocket sessions alive when clients answer application heartbeats", async () => {
   const server = new EventEmitter();
   const { logger, records } = captureLogger();
-  const socket = new FakeUpgradeSocket({ respondToPing: true });
+  const socket = new FakeUpgradeSocket({
+    respondToHeartbeat: true,
+    respondToPing: true,
+  });
   attachNetworkBridge(server, { heartbeatMs: 10, logger });
   upgrade(server, socket, "session-responsive");
 
