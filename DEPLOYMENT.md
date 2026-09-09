@@ -39,7 +39,11 @@ request bodies are intentionally omitted.
 Failures emit a separate record using the same `request_id`. Community import
 failures include the upstream stage, HTTP status, request ID, retry count, and
 `Retry-After` value when those fields are available. WebSocket upgrades and
-network bridge connection failures are logged as separate events.
+network bridge connection failures are logged as separate events. WebSocket
+acceptance and rejection records include `active_sessions`, `max_sessions`, and
+`session_id`. Session close records additionally include `reason` and
+`duration_ms`; unresponsive clients first emit
+`network_bridge_session_expired` with `reason=heartbeat_timeout`.
 
 Reverse proxies may supply `X-Request-ID`; valid values are returned to the
 client and used in all related records. Otherwise, the server generates an ID.
@@ -75,6 +79,8 @@ change before remote embedding can work.
 | `PORT` | `4190` | Platform-provided value | HTTP and WebSocket port. Railway supplies this automatically. |
 | `EMULATOR_ALLOW_LOCAL_FIRMWARE_UPLOAD` | Disabled | `0` | Set to `1` only when users should be able to select arbitrary local `.bin` files. |
 | `EMULATOR_NETWORK_ALLOW_PRIVATE` | Disabled | `0` | Set to `1` only in a trusted environment to allow emulated firmware to reach private, loopback, and reserved addresses. |
+| `EMULATOR_NETWORK_MAX_SESSIONS` | `16` | Tune for the instance size | Maximum concurrent emulator WebSocket sessions. Valid range: 1-256. |
+| `EMULATOR_NETWORK_HEARTBEAT_MS` | `30000` | `30000` | WebSocket Ping interval in milliseconds. Valid range: 1000-600000; an unanswered Ping is terminated at the next interval. |
 
 Environment variables take precedence over command-line defaults. The source
 development command, `npm start`, passes `--allow-local-firmware-upload`.
@@ -88,6 +94,8 @@ Recommended Railway variables:
 HOST=0.0.0.0
 EMULATOR_ALLOW_LOCAL_FIRMWARE_UPLOAD=0
 EMULATOR_NETWORK_ALLOW_PRIVATE=0
+EMULATOR_NETWORK_MAX_SESSIONS=16
+EMULATOR_NETWORK_HEARTBEAT_MS=30000
 ```
 
 Do not set `PORT` on Railway unless the platform configuration specifically
@@ -97,6 +105,18 @@ requires it. Railway injects `PORT` for the service.
 handling path. It is not authentication for `/api/emulator-network`. Keep the
 network bridge protected by its destination restrictions and by access control
 at the deployment or reverse-proxy layer.
+
+For Render deployments, the CLI can query the session lifecycle directly:
+
+```bash
+render logs --resources <service-id> --type app --text websocket_access
+render logs --resources <service-id> --type app --text network_bridge_session_closed
+render logs --resources <service-id> --type app --text network_bridge_session_expired
+```
+
+Compare accepted sessions (`status=101`) with close events by `session_id`.
+Capacity rejections use `status=503`, `reason=session_limit`, and report both the
+active and maximum session counts.
 
 ## Docker
 
