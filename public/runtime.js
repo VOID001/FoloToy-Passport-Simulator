@@ -8,17 +8,64 @@ export class QemuRuntime extends EventTarget {
   #networkDebug = false;
 
   async start(firmwareUrl) {
+    this.#ready = false;
+    this.dispatchEvent(new CustomEvent("state", { detail: "loading" }));
+    this.#reportProgress(3, "正在读取运行配置", "定位 QEMU WASM 运行时");
     const manifest = await this.#loadManifest();
+    this.#reportProgress(7, "正在请求固件", firmwareUrl || manifest.firmware);
     const response = await fetch(firmwareUrl || manifest.firmware, { cache: "no-store" });
     if (!response.ok) {
       throw new Error(`Firmware request failed: ${response.status}`);
     }
-    this.#launchWorker(manifest, await response.arrayBuffer());
+    const firmware = await this.#readFirmwareResponse(response);
+    this.#launchWorker(manifest, firmware);
   }
 
   async loadFirmware(firmware) {
+    this.#reportProgress(64, "正在准备虚拟设备", "加载 QEMU WASM 运行配置");
     const manifest = await this.#loadManifest();
     this.#launchWorker(manifest, firmware);
+  }
+
+  #reportProgress(value, stage, detail) {
+    this.dispatchEvent(new CustomEvent("progress", {
+      detail: { value, stage, detail },
+    }));
+  }
+
+  async #readFirmwareResponse(response) {
+    const total = Number(response.headers.get("content-length")) || 0;
+    if (!response.body) {
+      const firmware = await response.arrayBuffer();
+      this.#reportProgress(60, "固件下载完成", formatProgressBytes(firmware.byteLength));
+      return firmware;
+    }
+
+    const reader = response.body.getReader();
+    const chunks = [];
+    let loaded = 0;
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      chunks.push(value);
+      loaded += value.byteLength;
+      const progress = total > 0
+        ? 8 + (loaded / total) * 52
+        : Math.min(58, 8 + Math.log2(loaded / 1024 + 1) * 5);
+      const detail = total > 0
+        ? `${formatProgressBytes(loaded)} / ${formatProgressBytes(total)}`
+        : `${formatProgressBytes(loaded)} 已下载`;
+      this.#reportProgress(progress, "正在下载固件", detail);
+    }
+
+    const bytes = new Uint8Array(loaded);
+    let offset = 0;
+    for (const chunk of chunks) {
+      bytes.set(chunk, offset);
+      offset += chunk.byteLength;
+    }
+    this.#reportProgress(60, "固件下载完成", formatProgressBytes(loaded));
+    return bytes.buffer;
   }
 
   async #loadManifest() {
@@ -37,6 +84,7 @@ export class QemuRuntime extends EventTarget {
     this.#worker?.terminate();
     this.#ready = false;
     this.dispatchEvent(new CustomEvent("state", { detail: "loading" }));
+    this.#reportProgress(66, "正在启动工作线程", "创建隔离的模拟器运行环境");
     this.dispatchEvent(new CustomEvent("firmware", {
       detail: { bytes: new Uint8Array(firmware.slice(0)) },
     }));
@@ -97,6 +145,7 @@ export class QemuRuntime extends EventTarget {
     if (!this.#worker) return false;
     this.#ready = false;
     this.dispatchEvent(new CustomEvent("state", { detail: "restarting" }));
+    this.#reportProgress(18, "正在重启虚拟设备", "重置处理器与外设状态");
     this.#worker.postMessage({ type: "restart" });
     return true;
   }
@@ -105,8 +154,15 @@ export class QemuRuntime extends EventTarget {
     const { type } = event.data;
     if (type === "state") {
       this.dispatchEvent(new CustomEvent("state", { detail: event.data.state }));
+    } else if (type === "progress") {
+      this.#reportProgress(
+        event.data.value,
+        event.data.stage,
+        event.data.detail,
+      );
     } else if (type === "ready") {
       this.#ready = true;
+      this.#reportProgress(100, "装载完成", "固件已启动");
       this.dispatchEvent(new CustomEvent("state", { detail: "running" }));
     } else if (type === "frame") {
       this.dispatchEvent(new CustomEvent("frame", { detail: event.data }));
@@ -137,6 +193,11 @@ export class QemuRuntime extends EventTarget {
       this.dispatchEvent(new CustomEvent("error", { detail: event.data.message }));
     }
   }
+}
+
+function formatProgressBytes(bytes) {
+  if (bytes < 1024 * 1024) return `${Math.ceil(bytes / 1024)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(2)} MB`;
 }
 
 const qemuButtons = new Set(["UP", "DOWN", "OK"]);

@@ -25,6 +25,11 @@ const audio = new BrowserAudio((bytes) => runtime.sendMicrophone(bytes));
 const display = document.querySelector("#qemu-display");
 const context = display.getContext("2d", { alpha: false });
 const overlay = document.querySelector("#screen-overlay");
+const loadingProgress = document.querySelector("#loading-progress");
+const loadingProgressFill = document.querySelector("#loading-progress-fill");
+const loadingStage = document.querySelector("#loading-stage");
+const loadingPercent = document.querySelector("#loading-percent");
+const loadingDetail = document.querySelector("#loading-detail");
 const runtimeState = document.querySelector("#runtime-state");
 const runtimeLight = document.querySelector("#runtime-light");
 const logElement = document.querySelector("#event-log");
@@ -220,6 +225,79 @@ function setRuntimeState(state, detail) {
   else overlay.hidden = false;
 }
 
+function setLoadingProgress(value, stage, detail) {
+  const percent = Math.max(0, Math.min(100, Math.round(value)));
+  loadingProgressFill.style.width = `${percent}%`;
+  loadingPercent.value = `${percent}%`;
+  loadingPercent.textContent = `${percent}%`;
+  loadingStage.textContent = stage;
+  loadingDetail.textContent = detail;
+  loadingProgress.setAttribute("aria-valuenow", String(percent));
+  loadingProgress.setAttribute(
+    "aria-valuetext",
+    `${percent}%，${stage}，${detail}`,
+  );
+}
+
+function downloadProgressValue(loaded, total) {
+  if (total > 0) return 8 + (loaded / total) * 52;
+  return Math.min(58, 8 + Math.log2(loaded / 1024 + 1) * 5);
+}
+
+async function readFirmwareResponse(response, detail) {
+  const total = Number(response.headers.get("content-length")) || 0;
+  if (!response.body) {
+    const firmware = await response.arrayBuffer();
+    setLoadingProgress(60, "固件下载完成", formatFirmwareSize(firmware.byteLength));
+    return firmware;
+  }
+
+  const reader = response.body.getReader();
+  const chunks = [];
+  let loaded = 0;
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    chunks.push(value);
+    loaded += value.byteLength;
+    const byteDetail = total > 0
+      ? `${formatFirmwareSize(loaded)} / ${formatFirmwareSize(total)}`
+      : `${formatFirmwareSize(loaded)} 已下载`;
+    setLoadingProgress(downloadProgressValue(loaded, total), "正在下载固件", byteDetail);
+  }
+
+  const bytes = new Uint8Array(loaded);
+  let offset = 0;
+  for (const chunk of chunks) {
+    bytes.set(chunk, offset);
+    offset += chunk.byteLength;
+  }
+  setLoadingProgress(60, "固件下载完成", detail || formatFirmwareSize(loaded));
+  return bytes.buffer;
+}
+
+function readLocalFirmware(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.addEventListener("progress", (event) => {
+      const total = event.lengthComputable ? event.total : file.size;
+      setLoadingProgress(
+        downloadProgressValue(event.loaded, total),
+        "正在读取本地固件",
+        `${formatFirmwareSize(event.loaded)} / ${formatFirmwareSize(total)}`,
+      );
+    });
+    reader.addEventListener("load", () => {
+      setLoadingProgress(60, "固件读取完成", formatFirmwareSize(file.size));
+      resolve(reader.result);
+    });
+    reader.addEventListener("error", () => {
+      reject(reader.error || new Error("无法读取本地固件"));
+    });
+    reader.readAsArrayBuffer(file);
+  });
+}
+
 function setUploadBusy(busy) {
   firmwareInput.disabled = busy || !allowLocalFirmwareUpload;
   uploadControl.disabled = busy;
@@ -255,9 +333,10 @@ function clearDisplay() {
 }
 
 function resetScreenOverlay() {
-  overlay.classList.remove("is-unsupported");
-  overlay.querySelector(".loading-dot").hidden = false;
+  overlay.classList.remove("is-unsupported", "is-error");
+  loadingProgress.removeAttribute("aria-invalid");
   overlay.querySelector("strong").textContent = "QEMU WASM";
+  setLoadingProgress(0, "准备运行环境", "等待运行时镜像");
 }
 
 function buildRegisterGrid() {
@@ -474,28 +553,38 @@ function releasePointerButton(button, cancelled = false) {
 
 runtime.addEventListener("state", (event) => {
   const state = event.detail;
-  if (state === "loading" || state === "restarting") {
-    audio.reset();
+  if (state === "loading" || state === "restarting") audio.reset();
+  if (
+    state === "restarting" ||
+    (state === "loading" && currentRuntimeState !== "loading")
+  ) {
     resetScreenOverlay();
   }
   if (state === "running") {
+    setLoadingProgress(100, "装载完成", `${activeFirmwareName} 已启动`);
     if (pendingPresetId !== undefined) activePresetId = pendingPresetId;
     pendingPresetId = undefined;
     setUploadBusy(false);
     setRuntimeState(state, `${activeFirmwareName} 已运行`);
-    overlay.querySelector("small").textContent = "等待运行时镜像";
     presetFeedback.textContent = `${activeFirmwareName} 已刷写并运行`;
     log(`${activeFirmwareName} 已自动运行`);
   } else if (state === "loading") {
     resetButtonGestures();
     setUploadBusy(true);
     setRuntimeState(state, `正在加载 ${activeFirmwareName}`);
-    overlay.querySelector("small").textContent = `正在加载 ${activeFirmwareName}`;
+    if (loadingProgress.getAttribute("aria-valuenow") === "0") {
+      setLoadingProgress(3, "准备装载固件", activeFirmwareName);
+    }
   } else {
+    setLoadingProgress(18, "正在重启虚拟设备", "重置处理器与外设状态");
     setRuntimeState(state, "QEMU 重启中");
     log("QEMU hard restart");
   }
   renderPresetStates();
+});
+runtime.addEventListener("progress", (event) => {
+  const { value, stage, detail } = event.detail;
+  setLoadingProgress(value, stage, detail);
 });
 runtime.addEventListener("frame", (event) => drawFrame(event.detail));
 runtime.addEventListener("audio-config", (event) => audio.configure(event.detail));
@@ -538,9 +627,8 @@ runtime.addEventListener("unsupported-feature", (event) => {
   setUploadBusy(false);
   setRuntimeState("unsupported", "检测到 BLE，模拟器已暂停");
   overlay.classList.add("is-unsupported");
-  overlay.querySelector(".loading-dot").hidden = true;
   overlay.querySelector("strong").textContent = "模拟器暂不支持蓝牙";
-  overlay.querySelector("small").textContent = "This Emulator Does Not Support BLE";
+  loadingDetail.textContent = "This Emulator Does Not Support BLE";
   presetFeedback.textContent = `${activeFirmwareName} 需要 BLE，已停止运行`;
   log(`${activeFirmwareName} 使用了暂不支持的 BLE`);
 });
@@ -548,7 +636,13 @@ runtime.addEventListener("error", (event) => {
   pendingPresetId = undefined;
   setUploadBusy(false);
   setRuntimeState("error", "运行时不可用");
-  overlay.querySelector("small").textContent = event.detail;
+  overlay.classList.add("is-error");
+  loadingProgress.setAttribute("aria-invalid", "true");
+  setLoadingProgress(
+    loadingProgress.getAttribute("aria-valuenow"),
+    "装载失败",
+    event.detail,
+  );
   presetFeedback.textContent = `加载失败：${event.detail}`;
   renderPresetStates();
   log(event.detail);
@@ -695,13 +789,15 @@ async function loadPresetFirmware(button) {
     activeFirmwareName = firmwareName;
     setUploadBusy(true);
     setRuntimeState("loading", `正在下载 ${firmwareName}`);
-    overlay.querySelector("small").textContent = `正在读取 ${firmwareName}`;
+    resetScreenOverlay();
+    setLoadingProgress(5, "正在请求固件", firmwareName);
     presetFeedback.textContent = `正在加载 ${firmwareName}`;
     renderPresetStates();
 
     const response = await fetch(firmwareUrl, { cache: "no-store" });
     if (!response.ok) throw new Error(`镜像请求失败: ${response.status}`);
-    const firmware = await response.arrayBuffer();
+    const firmware = await readFirmwareResponse(response, firmwareName);
+    setLoadingProgress(62, "正在校验固件", formatFirmwareSize(firmware.byteLength));
     validateFirmwareFile({ name: firmwareUrl, size: firmware.byteLength });
     log(`加载 ${firmwareName} (${formatFirmwareSize(firmware.byteLength)})`);
     await runtime.loadFirmware(firmware);
@@ -743,7 +839,8 @@ async function importCommunityFirmware() {
     setUploadBusy(true);
     confirmFirmwareUpload.textContent = "正在导入…";
     setRuntimeState("loading", "正在读取社区固件");
-    overlay.querySelector("small").textContent = "正在从 FoloToy 社区下载";
+    resetScreenOverlay();
+    setLoadingProgress(5, "正在连接 FoloToy 社区", "请求玩法固件");
     presetFeedback.textContent = "正在导入社区固件";
     renderPresetStates();
 
@@ -757,13 +854,14 @@ async function importCommunityFirmware() {
       throw new Error(payload?.error || `社区固件请求失败: ${response.status}`);
     }
 
-    const firmware = await response.arrayBuffer();
+    const firmware = await readFirmwareResponse(response, "社区固件");
     let firmwareName = response.headers.get("x-firmware-name") || "社区固件";
     try {
       firmwareName = decodeURIComponent(firmwareName);
     } catch {
       firmwareName = "社区固件";
     }
+    setLoadingProgress(62, "正在校验固件", `${firmwareName} · ${formatFirmwareSize(firmware.byteLength)}`);
     validateFirmwareFile({ name: `${firmwareName}.bin`, size: firmware.byteLength });
     activeFirmwareName = firmwareName;
     firmwareGuidance.close();
@@ -816,11 +914,12 @@ firmwareInput.addEventListener("change", async () => {
     activeFirmwareName = file.name;
     setUploadBusy(true);
     setRuntimeState("loading", `正在读取 ${file.name}`);
-    overlay.querySelector("small").textContent = `${formatFirmwareSize(file.size)} · 本地固件`;
+    resetScreenOverlay();
+    setLoadingProgress(5, "正在校验本地固件", `${formatFirmwareSize(file.size)} · ${file.name}`);
     presetFeedback.textContent = `正在加载本地固件 ${file.name}`;
     renderPresetStates();
     log(`加载 ${file.name} (${formatFirmwareSize(file.size)})`);
-    await runtime.loadFirmware(await file.arrayBuffer());
+    await runtime.loadFirmware(await readLocalFirmware(file));
   } catch (error) {
     pendingPresetId = undefined;
     activeFirmwareName = previousFirmwareName;
@@ -898,7 +997,13 @@ async function startApplication() {
   runtime.start(initialPresetButton.dataset.firmwareUrl).catch((error) => {
     setUploadBusy(false);
     setRuntimeState("waiting", "等待 WASM QEMU");
-    overlay.querySelector("small").textContent = "放入 /public/wasm/manifest.json 后自动启动";
+    overlay.classList.add("is-error");
+    loadingProgress.setAttribute("aria-invalid", "true");
+    setLoadingProgress(
+      loadingProgress.getAttribute("aria-valuenow"),
+      "运行时未就绪",
+      "请检查 /public/wasm/manifest.json",
+    );
     log(error.message);
   });
 }

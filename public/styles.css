@@ -382,7 +382,7 @@ body.simulator-fullscreen .stage.is-fullscreen {
   display: grid;
   align-content: center;
   justify-items: center;
-  gap: 7px;
+  gap: 10px;
   padding: 20px;
   text-align: center;
   background: rgba(2, 7, 13, 0.88);
@@ -390,7 +390,60 @@ body.simulator-fullscreen .stage.is-fullscreen {
 }
 .screen-overlay[hidden] { display: none; }
 .screen-overlay strong { font: 700 12px "SF Mono", monospace; letter-spacing: .08em; }
-.screen-overlay small { font-size: 9px; line-height: 1.35; color: #a9bab4; }
+.loading-progress {
+  width: min(100%, 168px);
+  display: grid;
+  gap: 7px;
+}
+.loading-progress-meta {
+  min-width: 0;
+  min-height: 20px;
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 8px;
+  font: 8px/1.2 "SF Mono", "Noto Sans Mono CJK SC", monospace;
+}
+.loading-progress-meta span {
+  min-width: 0;
+  color: #a9bab4;
+  text-align: left;
+  text-wrap: pretty;
+}
+.loading-progress-meta output {
+  flex: 0 0 32px;
+  color: var(--mint);
+  font-size: 11px;
+  font-weight: 700;
+  text-align: right;
+}
+.loading-progress-track {
+  height: 4px;
+  overflow: hidden;
+  border: 1px solid rgba(231, 246, 239, .2);
+  border-radius: 2px;
+  background: rgba(231, 246, 239, .06);
+}
+.loading-progress-track span {
+  display: block;
+  width: 0;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--mint);
+  box-shadow: 0 0 8px rgba(67, 238, 160, .5);
+  transition: width .24s cubic-bezier(.2, .75, .25, 1);
+}
+.loading-progress small {
+  min-height: 24px;
+  color: #a9bab4;
+  font: 8px/1.45 "SF Mono", "Noto Sans Mono CJK SC", monospace;
+  text-wrap: pretty;
+}
+.screen-overlay.is-error .loading-progress-meta output { color: var(--danger); }
+.screen-overlay.is-error .loading-progress-track span {
+  background: var(--danger);
+  box-shadow: 0 0 8px rgba(239, 106, 98, .45);
+}
 .screen-overlay.is-unsupported {
   gap: 9px;
   background: rgba(9, 12, 16, .94);
@@ -410,7 +463,14 @@ body.simulator-fullscreen .stage.is-fullscreen {
   font: 8px/1.55 "SF Mono", monospace;
   text-wrap: pretty;
 }
-.loading-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--mint); box-shadow: 0 0 12px var(--mint); animation: breathe 1.3s ease-in-out infinite; }
+.screen-overlay.is-unsupported .loading-progress {
+  width: auto;
+  display: block;
+}
+.screen-overlay.is-unsupported .loading-progress-meta,
+.screen-overlay.is-unsupported .loading-progress-track {
+  display: none;
+}
 .hardware-controls { position: absolute; inset: 0; }
 .hardware-key {
   position: absolute;
@@ -1171,7 +1231,6 @@ body.simulator-fullscreen .stage.is-fullscreen {
 .network-empty span {
   font: 9px/1.5 "SF Mono", monospace;
 }
-@keyframes breathe { 50% { opacity: .25; transform: scale(.65); } }
 @keyframes preset-progress {
   0% { transform: translateX(-100%) scaleX(.35); }
   55% { transform: translateX(40%) scaleX(.55); }

@@ -145,9 +145,19 @@
             <div class="screen-bezel">
               <canvas id="qemu-display" width="240" height="320" aria-label="QEMU firmware display"></canvas>
               <div id="screen-overlay" class="screen-overlay">
-                <span class="loading-dot"></span>
                 <strong>QEMU WASM</strong>
-                <small>等待运行时镜像</small>
+                <div id="loading-progress" class="loading-progress"
+                     role="progressbar" aria-label="固件装载进度"
+                     aria-valuemin="0" aria-valuemax="100" aria-valuenow="0">
+                  <div class="loading-progress-meta">
+                    <span id="loading-stage">准备运行环境</span>
+                    <output id="loading-percent">0%</output>
+                  </div>
+                  <div class="loading-progress-track" aria-hidden="true">
+                    <span id="loading-progress-fill"></span>
+                  </div>
+                  <small id="loading-detail">等待运行时镜像</small>
+                </div>
               </div>
             </div>
 

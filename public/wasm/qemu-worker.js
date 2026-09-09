@@ -25,6 +25,10 @@ let lastDebugAt = 0;
 let buttonTransitions = [];
 let buttonBusyUntil = 0;
 
+function reportProgress(value, stage, detail) {
+  postMessage({ type: "progress", value, stage, detail });
+}
+
 function copyDirtyPixels(frame) {
   const { width, pixels, dirtyRegion } = frame;
   const output = new Uint8ClampedArray(
@@ -134,12 +138,17 @@ async function start(firmware, debugEnabled = false) {
   network?.close();
   networkDebugEnabled = Boolean(debugEnabled);
   const currentGeneration = ++generation;
+  reportProgress(70, "正在初始化 WebAssembly", "编译并载入 ESP32-C3 模拟核心");
   wasm = await init();
+  reportProgress(80, "正在创建虚拟设备", "初始化 ESP32-C3 处理器");
   emulator = new WasmEmulator("esp32c3");
+  reportProgress(86, "正在载入系统 ROM", "配置启动模式与虚拟 Wi-Fi");
   emulator.load_default_rom();
   emulator.set_boot_from_rom(true);
   emulator.set_wifi_config(EMULATOR_WIFI_SSID, EMULATOR_WIFI_PASSWORD);
+  reportProgress(91, "正在刷写固件镜像", "写入虚拟 Flash");
   emulator.load_firmware(new Uint8Array(firmware));
+  reportProgress(95, "正在连接虚拟外设", "启动显示、音频与网络桥接");
   const protocol = self.location.protocol === "https:" ? "wss:" : "ws:";
   network = new EmulatorNetworkBridge(emulator, {
     url: `${protocol}//${self.location.host}/api/emulator-network`,
@@ -149,6 +158,7 @@ async function start(firmware, debugEnabled = false) {
   network.setDebugEnabled(networkDebugEnabled);
   network.connect();
   createBoard();
+  reportProgress(98, "正在启动固件", "等待模拟器进入运行状态");
   running = true;
   lastDebugAt = 0;
   postMessage({ type: "ready" });
@@ -159,9 +169,12 @@ function restart() {
   if (!emulator) return;
   const resumeLoop = !running;
   postMessage({ type: "state", state: "restarting" });
+  reportProgress(42, "正在重置处理器", "清理当前执行状态");
   emulator.restart();
+  reportProgress(76, "正在恢复虚拟外设", "重新连接按键、显示与音频");
   createBoard();
   running = true;
+  reportProgress(98, "正在启动固件", "等待模拟器恢复运行");
   postMessage({ type: "ready" });
   if (resumeLoop) runLoop(++generation);
 }
