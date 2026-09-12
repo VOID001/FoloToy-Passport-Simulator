@@ -321,11 +321,15 @@ body.inspector-open .emulator { margin-right: min(440px, 36vw); }
   aspect-ratio: 1334 / 1260;
   filter: drop-shadow(0 34px 28px rgba(0, 0, 0, 0.5));
 }
-.fullscreen-toggle {
+.simulator-actions {
   position: absolute;
   top: max(16px, env(safe-area-inset-top));
   right: max(16px, env(safe-area-inset-right));
   z-index: 5;
+  display: flex;
+  gap: 8px;
+}
+.simulator-action {
   width: 44px;
   height: 44px;
   display: grid;
@@ -339,21 +343,58 @@ body.inspector-open .emulator { margin-right: min(440px, 36vw); }
   backdrop-filter: blur(12px);
   transition: border-color .15s ease, color .15s ease, background .15s ease;
 }
-.fullscreen-toggle svg {
+.simulator-action svg {
   width: 17px;
   height: 17px;
+}
+.screenshot-copy .screenshot-success-icon { display: none; }
+.screenshot-copy[data-state="success"] {
+  border-color: var(--mint);
+  color: var(--mint);
+  background: rgba(67, 238, 160, .14);
+}
+.screenshot-copy[data-state="success"] .screenshot-camera-icon { display: none; }
+.screenshot-copy[data-state="success"] .screenshot-success-icon { display: block; }
+.screenshot-copy[data-state="error"] {
+  border-color: var(--danger);
+  color: var(--danger);
+  background: rgba(239, 106, 98, .12);
+}
+.simulator-action:disabled {
+  cursor: wait;
+  opacity: .72;
 }
 .fullscreen-toggle .fullscreen-exit-icon { display: none; }
 .fullscreen-toggle[aria-pressed="true"] .fullscreen-enter-icon { display: none; }
 .fullscreen-toggle[aria-pressed="true"] .fullscreen-exit-icon { display: block; }
-.fullscreen-toggle:hover,
-.fullscreen-toggle:focus-visible {
+.simulator-action:not(:disabled):hover,
+.simulator-action:focus-visible {
   border-color: var(--mint);
   color: var(--mint);
   background: rgba(13, 18, 22, .94);
   outline: none;
 }
-.fullscreen-toggle:active { background: rgba(67, 238, 160, .14); }
+.simulator-action:not(:disabled):active { background: rgba(67, 238, 160, .14); }
+.screenshot-feedback {
+  position: absolute;
+  top: max(68px, calc(env(safe-area-inset-top) + 68px));
+  right: max(16px, env(safe-area-inset-right));
+  z-index: 5;
+  max-width: min(240px, calc(100% - 32px));
+  padding: 8px 10px;
+  border: 1px solid rgba(226, 238, 241, .22);
+  border-radius: 4px;
+  color: var(--ink);
+  background: rgba(9, 12, 16, .9);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, .32);
+  font: 600 10px/1.4 "SF Mono", "Noto Sans Mono CJK SC", monospace;
+  text-align: right;
+  text-wrap: pretty;
+  backdrop-filter: blur(12px);
+}
+.screenshot-feedback[data-state="success"] { color: var(--mint); }
+.screenshot-feedback[data-state="error"] { color: #ffaaa5; }
+.screenshot-feedback[hidden] { display: none; }
 .stage:fullscreen,
 .stage.is-fullscreen {
   width: 100vw;
