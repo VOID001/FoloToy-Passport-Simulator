@@ -14,6 +14,7 @@ import {
   REGISTER_NAMES,
   formatHex32,
 } from "./inspector.js";
+import { copyCanvasPngToClipboard } from "./screen-capture.js";
 import { showSimulatorNoticeOnce } from "./simulator-notice.js";
 
 const DOUBLE_CLICK_WINDOW_MS = 300;
@@ -55,6 +56,8 @@ const initialPresetId = resolveFirmwarePresetId(
 const initialPresetButton = presetButtonsById.get(initialPresetId);
 const presetFeedback = document.querySelector("#preset-feedback");
 const inspectorToggle = document.querySelector("#inspector-toggle");
+const screenshotCopy = document.querySelector("#screenshot-copy");
+const screenshotFeedback = document.querySelector("#screenshot-feedback");
 const fullscreenToggle = document.querySelector("#fullscreen-toggle");
 const simulatorStage = document.querySelector("#simulator-stage");
 const audioEnable = document.querySelector("#audio-enable");
@@ -97,6 +100,7 @@ let uartPaused = false;
 let uartRenderPending = false;
 let allowLocalFirmwareUpload = false;
 let fullscreenFallback = false;
+let screenshotFeedbackTimer = 0;
 const heldPointerButtons = new Set();
 const heldKeyboardButtons = new Set();
 const activeButtonGestures = new Map();
@@ -465,6 +469,58 @@ async function toggleSimulatorFullscreen() {
   await enterSimulatorFullscreen();
 }
 
+function showScreenshotFeedback(state, message) {
+  window.clearTimeout(screenshotFeedbackTimer);
+  screenshotCopy.dataset.state = state;
+  screenshotCopy.setAttribute(
+    "aria-label",
+    state === "success"
+      ? "模拟器屏幕截图已复制到剪贴板"
+      : "截取模拟器屏幕并复制到剪贴板",
+  );
+  screenshotCopy.title = message;
+  screenshotFeedback.dataset.state = state;
+  screenshotFeedback.textContent = message;
+  screenshotFeedback.hidden = false;
+  screenshotFeedbackTimer = window.setTimeout(() => {
+    delete screenshotCopy.dataset.state;
+    screenshotCopy.setAttribute("aria-label", "截取模拟器屏幕并复制到剪贴板");
+    screenshotCopy.title = "复制屏幕截图";
+    screenshotFeedback.hidden = true;
+  }, 2400);
+}
+
+function screenshotErrorMessage(error) {
+  if (/[\u4e00-\u9fff]/u.test(error?.message || "")) return error.message;
+  if (["NotAllowedError", "SecurityError"].includes(error?.name)) {
+    return "无法访问剪贴板，请检查浏览器权限";
+  }
+  return "屏幕截图复制失败，请重试";
+}
+
+async function copySimulatorScreen() {
+  window.clearTimeout(screenshotFeedbackTimer);
+  delete screenshotCopy.dataset.state;
+  screenshotCopy.disabled = true;
+  screenshotCopy.setAttribute("aria-busy", "true");
+  screenshotFeedback.removeAttribute("data-state");
+  screenshotFeedback.textContent = "正在复制屏幕截图";
+  screenshotFeedback.hidden = false;
+
+  try {
+    await copyCanvasPngToClipboard(display);
+    showScreenshotFeedback("success", "屏幕截图已复制到剪贴板");
+    log("屏幕截图已复制到剪贴板");
+  } catch (error) {
+    const message = screenshotErrorMessage(error);
+    showScreenshotFeedback("error", message);
+    log(message);
+  } finally {
+    screenshotCopy.disabled = false;
+    screenshotCopy.setAttribute("aria-busy", "false");
+  }
+}
+
 function drawFrame({ pixels, x = 0, y = 0, width, height }) {
   if (x + width > display.width || y + height > display.height) return;
   context.putImageData(
@@ -708,6 +764,7 @@ inspectorToggle.addEventListener("click", () => {
   setInspectorOpen(!inspectorPanel.classList.contains("is-open"));
 });
 document.querySelector("#inspector-close").addEventListener("click", () => setInspectorOpen(false));
+screenshotCopy.addEventListener("click", copySimulatorScreen);
 fullscreenToggle.addEventListener("click", toggleSimulatorFullscreen);
 document.addEventListener("fullscreenchange", () => {
   if (document.fullscreenElement !== simulatorStage) fullscreenFallback = false;
