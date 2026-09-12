@@ -18,7 +18,19 @@ export class QemuRuntime extends EventTarget {
       throw new Error(`Firmware request failed: ${response.status}`);
     }
     const firmware = await this.#readFirmwareResponse(response);
+    await this.#verifyFirmwareIntegrity(firmware, manifest.firmwareSha256);
     this.#launchWorker(manifest, firmware);
+  }
+
+  async #verifyFirmwareIntegrity(firmware, expectedSha256) {
+    if (!expectedSha256) return;
+    const digest = await crypto.subtle.digest("SHA-256", firmware);
+    const actual = Array.from(new Uint8Array(digest))
+      .map((byte) => byte.toString(16).padStart(2, "0"))
+      .join("");
+    if (actual !== expectedSha256.toLowerCase()) {
+      throw new Error("固件完整性校验失败：SHA-256 不匹配，拒绝加载");
+    }
   }
 
   async loadFirmware(firmware) {
