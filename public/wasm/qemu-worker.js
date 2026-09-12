@@ -8,7 +8,7 @@ import {
 } from "./network.js";
 
 const DEFAULT_BATCH_SIZE = 50_000;
-const FRAME_BUDGET_MS = 12;
+const FRAME_BUDGET_MS = 8;
 const DEBUG_INTERVAL_MS = 250;
 const CLICK_CYCLES = 12_000_000;
 const DOUBLE_GAP_CYCLES = 16_000_000;
@@ -198,11 +198,12 @@ function runLoop(currentGeneration) {
       break;
     }
     serviceButtonTransitions();
-    board.drain();
+    board.drain({ flushFrame: false });
     board.pumpAudio(performance.now());
     network?.drain();
     if (emulator.needs_restart()) restart();
   }
+  board.flushFrame();
   if (uart) {
     postMessage({ type: "uart", data: uart });
   }

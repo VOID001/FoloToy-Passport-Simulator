@@ -37,7 +37,7 @@ export class AiPassportBoard {
     );
   }
 
-  drain() {
+  drain(options = {}) {
     for (const event of this.bridge.drain()) {
       if (event.type === 'mmio') {
         this.audio.handleRegisterWrite(event.address, event.value);
@@ -60,6 +60,12 @@ export class AiPassportBoard {
       this.onUnknownEvent(event);
     }
 
+    if (options.flushFrame !== false) {
+      this.flushFrame();
+    }
+  }
+
+  flushFrame() {
     const dirtyRegion = this.display.consumeDirtyRegion();
     if (dirtyRegion) {
       this.onFrame({
