@@ -40,12 +40,39 @@ const FLOW_IDLE_MS = 120_000;
 const RETRANSMIT_MS = 800;
 const MAX_RETRANSMITS = 5;
 const MAX_WEBSOCKET_PAYLOAD = 2048;
-const MAX_WEBSOCKET_SESSIONS = 8;
+const DEFAULT_MAX_WEBSOCKET_SESSIONS = 16;
+const MAX_CONFIGURED_WEBSOCKET_SESSIONS = 256;
+const DEFAULT_WEBSOCKET_HEARTBEAT_MS = 30_000;
+const MIN_WEBSOCKET_HEARTBEAT_MS = 1_000;
+const MAX_WEBSOCKET_HEARTBEAT_MS = 10 * 60_000;
 const WEBSOCKET_GUID = "258EAFA5-E914-47DA-95CA-C5AB0DC85B11";
 const noOpLogger = Object.freeze({
   info() {},
   warn() {},
 });
+
+function boundedInteger(value, fallback, { min, max }) {
+  if (value === undefined || value === "") return fallback;
+  const parsed = Number(value);
+  return Number.isSafeInteger(parsed) && parsed >= min && parsed <= max
+    ? parsed
+    : fallback;
+}
+
+export function networkBridgeRuntimeOptions(env = process.env) {
+  return Object.freeze({
+    heartbeatMs: boundedInteger(
+      env.EMULATOR_NETWORK_HEARTBEAT_MS,
+      DEFAULT_WEBSOCKET_HEARTBEAT_MS,
+      { min: MIN_WEBSOCKET_HEARTBEAT_MS, max: MAX_WEBSOCKET_HEARTBEAT_MS },
+    ),
+    maxSessions: boundedInteger(
+      env.EMULATOR_NETWORK_MAX_SESSIONS,
+      DEFAULT_MAX_WEBSOCKET_SESSIONS,
+      { min: 1, max: MAX_CONFIGURED_WEBSOCKET_SESSIONS },
+    ),
+  });
+}
 
 function sameIp(left, right) {
   return left.every((value, index) => value === right[index]);
@@ -528,15 +555,17 @@ class WebSocketPeer {
     this.onText = () => {};
     this.onClose = () => {};
     this.onError = () => {};
+    this.onPong = () => {};
     this.closed = false;
     socket.on("data", (chunk) => {
       this.buffer = Buffer.concat([this.buffer, chunk]);
       this.#parse();
     });
-    socket.on("close", () => this.#closed());
+    socket.on("end", () => this.#closed("socket_end"));
+    socket.on("close", () => this.#closed("socket_close"));
     socket.on("error", (error) => {
       this.onError(error);
-      this.#closed();
+      this.#closed("socket_error");
     });
   }
 
@@ -549,14 +578,24 @@ class WebSocketPeer {
   }
 
   sendJson(payload) {
-    this.#sendFrame(0x01, Buffer.from(JSON.stringify(payload)));
+    return this.#sendFrame(0x01, Buffer.from(JSON.stringify(payload)));
   }
 
-  close() {
+  ping() {
+    return this.#sendFrame(0x09, Buffer.alloc(0));
+  }
+
+  close(reason = "peer_close") {
     if (this.closed) return;
     this.#sendFrame(0x08, Buffer.alloc(0));
+    this.#closed(reason);
     this.socket.end();
-    this.#closed();
+  }
+
+  terminate(reason) {
+    if (this.closed) return;
+    this.#closed(reason);
+    this.socket.destroy();
   }
 
   #parse() {
@@ -568,15 +607,15 @@ class WebSocketPeer {
       const masked = Boolean(second & 0x80);
       let length = second & 0x7f;
       let offset = 2;
-      if (!final || !masked) return this.close();
+      if (!final || !masked) return this.close("protocol_error");
       if (length === 126) {
         if (this.buffer.byteLength < 4) return;
         length = this.buffer.readUInt16BE(2);
         offset = 4;
       } else if (length === 127) {
-        return this.close();
+        return this.close("protocol_error");
       }
-      if (length > MAX_WEBSOCKET_PAYLOAD) return this.close();
+      if (length > MAX_WEBSOCKET_PAYLOAD) return this.close("payload_too_large");
       if (this.buffer.byteLength < offset + 4 + length) return;
       const mask = this.buffer.subarray(offset, offset + 4);
       offset += 4;
@@ -588,14 +627,15 @@ class WebSocketPeer {
 
       if (opcode === 0x01) this.onText(payload.toString("utf8"));
       else if (opcode === 0x02) this.onBinary(new Uint8Array(payload));
-      else if (opcode === 0x08) return this.close();
+      else if (opcode === 0x08) return this.close("client_close");
       else if (opcode === 0x09) this.#sendFrame(0x0a, payload);
-      else if (opcode !== 0x0a) return this.close();
+      else if (opcode === 0x0a) this.onPong();
+      else return this.close("protocol_error");
     }
   }
 
   #sendFrame(opcode, data) {
-    if (this.closed || !this.socket.writable) return;
+    if (this.closed || !this.socket.writable) return false;
     const payload = Buffer.from(data);
     const header = payload.byteLength < 126
       ? Buffer.from([0x80 | opcode, payload.byteLength])
@@ -606,12 +646,13 @@ class WebSocketPeer {
           payload.byteLength & 0xff,
         ]);
     this.socket.write(Buffer.concat([header, payload]));
+    return true;
   }
 
-  #closed() {
+  #closed(reason) {
     if (this.closed) return;
     this.closed = true;
-    this.onClose();
+    this.onClose(reason);
   }
 }
 
@@ -627,13 +668,22 @@ function originMatchesHost(request) {
 export function attachNetworkBridge(server, options = {}) {
   const allowPrivate = options.allowPrivate ??
     process.env.EMULATOR_NETWORK_ALLOW_PRIVATE === "1";
+  const runtimeOptions = networkBridgeRuntimeOptions(options.env);
+  const heartbeatMs = options.heartbeatMs ?? runtimeOptions.heartbeatMs;
+  const maxSessions = options.maxSessions ?? runtimeOptions.maxSessions;
   const logger = options.logger ?? defaultLogger;
+  const setHeartbeatInterval = options.setIntervalFn ?? setInterval;
+  const clearHeartbeatInterval = options.clearIntervalFn ?? clearInterval;
   const sessions = new Set();
+  server.on("close", () => {
+    for (const entry of sessions) entry.peer.terminate("server_close");
+  });
   server.on("upgrade", (request, socket, head) => {
     const startedAt = performance.now();
     const requestId = requestIdFrom(request.headers["x-request-id"]);
     const accessFields = {
       request_id: requestId,
+      session_id: requestId,
       method: request.method,
       path: "<invalid>",
       remote_address: request.socket.remoteAddress,
@@ -645,6 +695,8 @@ export function attachNetworkBridge(server, options = {}) {
         ...accessFields,
         status,
         reason,
+        active_sessions: sessions.size,
+        max_sessions: maxSessions,
         duration_ms: Math.round(performance.now() - startedAt),
       });
     };
@@ -666,7 +718,7 @@ export function attachNetworkBridge(server, options = {}) {
       socket.destroy();
       return;
     }
-    if (sessions.size >= MAX_WEBSOCKET_SESSIONS) {
+    if (sessions.size >= maxSessions) {
       rejectUpgrade(503, "session_limit");
       socket.write("HTTP/1.1 503 Service Unavailable\r\nConnection: close\r\n\r\n");
       socket.destroy();
@@ -697,12 +749,6 @@ export function attachNetworkBridge(server, options = {}) {
       `X-Request-ID: ${requestId}`,
       "\r\n",
     ].join("\r\n"));
-    logger.info("websocket_access", {
-      ...accessFields,
-      status: 101,
-      duration_ms: Math.round(performance.now() - startedAt),
-    });
-
     const peer = new WebSocketPeer(socket, head);
     const session = new EthernetNatSession({
       ...options,
@@ -712,12 +758,24 @@ export function attachNetworkBridge(server, options = {}) {
       sendFrame: (frame) => peer.sendBinary(frame),
       emitEvent: (event) => peer.sendJson(event),
     });
+    const entry = {
+      heartbeatTimer: null,
+      peer,
+      session,
+    };
+    let heartbeatSequence = 0;
+    let pendingHeartbeat = null;
     peer.onBinary = (frame) => session.receive(frame);
     peer.onText = (text) => {
       try {
         const message = JSON.parse(text);
         if (message.type === "network-debug") {
           session.setDebugEnabled(message.enabled);
+        } else if (
+          message.type === "network-heartbeat-ack" &&
+          message.id === pendingHeartbeat
+        ) {
+          pendingHeartbeat = null;
         }
       } catch {
         peer.close();
@@ -729,15 +787,52 @@ export function attachNetworkBridge(server, options = {}) {
         ...errorLogFields(error),
       });
     };
-    peer.onClose = () => {
+    peer.onClose = (reason) => {
+      clearHeartbeatInterval(entry.heartbeatTimer);
       session.close();
-      sessions.delete(session);
+      sessions.delete(entry);
       logger.info("network_bridge_session_closed", {
         session_id: requestId,
+        reason,
+        active_sessions: sessions.size,
+        max_sessions: maxSessions,
         duration_ms: Math.round(performance.now() - startedAt),
       });
     };
-    sessions.add(session);
+    sessions.add(entry);
+    logger.info("websocket_access", {
+      ...accessFields,
+      session_id: requestId,
+      status: 101,
+      active_sessions: sessions.size,
+      max_sessions: maxSessions,
+      heartbeat_ms: heartbeatMs,
+      duration_ms: Math.round(performance.now() - startedAt),
+    });
+    entry.heartbeatTimer = setHeartbeatInterval(() => {
+      if (pendingHeartbeat !== null) {
+        logger.warn("network_bridge_session_expired", {
+          session_id: requestId,
+          reason: "heartbeat_timeout",
+          heartbeat_id: pendingHeartbeat,
+          heartbeat_type: "application",
+          active_sessions: sessions.size,
+          max_sessions: maxSessions,
+          heartbeat_ms: heartbeatMs,
+        });
+        peer.terminate("heartbeat_timeout");
+        return;
+      }
+      heartbeatSequence += 1;
+      pendingHeartbeat = heartbeatSequence;
+      if (
+        !peer.ping() ||
+        !peer.sendJson({ type: "network-heartbeat", id: pendingHeartbeat })
+      ) {
+        peer.terminate("socket_unwritable");
+      }
+    }, heartbeatMs);
+    entry.heartbeatTimer.unref?.();
     peer.start();
     peer.sendJson({
       event: "bridge-ready",

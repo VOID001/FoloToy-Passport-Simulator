@@ -25,7 +25,7 @@ button { font: inherit; cursor: pointer; }
 .emulator {
   min-height: 100svh;
   display: grid;
-  grid-template-rows: auto 1fr;
+  grid-template-rows: auto 1fr auto;
   transition: margin-right .24s cubic-bezier(.2, .75, .25, 1);
 }
 body.inspector-open .emulator { margin-right: min(440px, 36vw); }
@@ -281,6 +281,33 @@ body.inspector-open .emulator { margin-right: min(440px, 36vw); }
   font: 9px/1.6 "SF Mono", "Noto Sans Mono CJK SC", monospace;
   text-wrap: pretty;
 }
+.site-footer {
+  min-height: 38px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  padding: 9px clamp(16px, 4vw, 56px);
+  border-top: 1px solid var(--line);
+  color: var(--muted);
+  background: rgba(13, 18, 22, .52);
+  font: 10px/1.4 "SF Mono", "Noto Sans Mono CJK SC", monospace;
+  text-align: center;
+}
+.site-footer a {
+  color: var(--ink);
+  font-weight: 700;
+  text-decoration-color: rgba(237, 243, 245, .38);
+  text-underline-offset: 3px;
+  transition: color .15s ease, text-decoration-color .15s ease;
+}
+.site-footer a:hover,
+.site-footer a:focus-visible {
+  color: var(--mint);
+  text-decoration-color: var(--mint);
+  outline: none;
+}
+.site-footer a:active { color: #35d991; }
 .stage {
   position: relative;
   display: grid;

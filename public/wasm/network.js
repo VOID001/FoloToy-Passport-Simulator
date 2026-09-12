@@ -1,5 +1,15 @@
 export const EMULATOR_WIFI_SSID = "Emulator Host Bridge";
 export const EMULATOR_WIFI_PASSWORD = "";
+const MAX_RECONNECT_DELAY_MS = 30_000;
+
+export function reconnectDelayMs(attempt, random = Math.random) {
+  const normalizedAttempt = Number.isSafeInteger(attempt) && attempt > 0
+    ? attempt
+    : 0;
+  const base = Math.min(MAX_RECONNECT_DELAY_MS, 1000 * (2 ** normalizedAttempt));
+  const randomValue = Math.min(1, Math.max(0, Number(random()) || 0));
+  return Math.round(base * (0.5 + randomValue * 0.5));
+}
 
 export function unpackEthernetFrames(bytes) {
   const frames = [];
@@ -27,6 +37,10 @@ export class EmulatorNetworkBridge {
     this.WebSocketClass = options.WebSocketClass ?? WebSocket;
     this.onStatus = options.onStatus ?? (() => {});
     this.onEvent = options.onEvent ?? (() => {});
+    this.random = options.random ?? Math.random;
+    this.setTimer = options.setTimeout ??
+      ((callback, delayMs) => setTimeout(callback, delayMs));
+    this.clearTimer = options.clearTimeout ?? ((timer) => clearTimeout(timer));
     this.socket = null;
     this.stats = {
       state: "connecting",
@@ -36,6 +50,7 @@ export class EmulatorNetworkBridge {
       rxBytes: 0,
     };
     this.lastReportedAt = 0;
+    this.retryAttempt = 0;
     this.retryTimer = null;
     this.stopped = true;
     this.debugEnabled = false;
@@ -44,6 +59,7 @@ export class EmulatorNetworkBridge {
   connect() {
     this.close();
     this.stopped = false;
+    this.retryAttempt = 0;
     this.#open();
   }
 
@@ -56,6 +72,7 @@ export class EmulatorNetworkBridge {
     socket.addEventListener("open", () => {
       if (this.socket !== socket) return;
       this.stats.state = "connected";
+      this.retryAttempt = 0;
       socket.send(JSON.stringify({
         type: "network-debug",
         enabled: this.debugEnabled,
@@ -68,7 +85,12 @@ export class EmulatorNetworkBridge {
       this.stats.state = "offline";
       this.#report(true);
       if (!this.stopped) {
-        this.retryTimer = setTimeout(() => this.#open(), 1000);
+        const delayMs = reconnectDelayMs(this.retryAttempt, this.random);
+        this.retryAttempt += 1;
+        this.retryTimer = this.setTimer(() => {
+          this.retryTimer = null;
+          if (!this.stopped) this.#open();
+        }, delayMs);
       }
     });
     socket.addEventListener("error", () => {
@@ -82,6 +104,13 @@ export class EmulatorNetworkBridge {
       if (typeof event.data === "string") {
         try {
           const detail = JSON.parse(event.data);
+          if (detail.type === "network-heartbeat") {
+            socket.send(JSON.stringify({
+              type: "network-heartbeat-ack",
+              id: detail.id,
+            }));
+            return;
+          }
           if (this.debugEnabled || detail.event === "bridge-ready") {
             this.onEvent(detail);
           }
@@ -130,7 +159,7 @@ export class EmulatorNetworkBridge {
 
   close() {
     this.stopped = true;
-    clearTimeout(this.retryTimer);
+    this.clearTimer(this.retryTimer);
     this.retryTimer = null;
     const socket = this.socket;
     this.socket = null;
