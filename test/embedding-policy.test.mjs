@@ -26,7 +26,7 @@ test("HTML does not restrict iframe parent origins", async (t) => {
         policy,
         /script-src 'self' 'wasm-unsafe-eval' https:\/\/cloud\.umami\.is;/,
       );
-      assert.match(policy, /connect-src 'self' https:\/\/cloud\.umami\.is;/);
+      assert.match(policy, /connect-src 'self' https:\/\/gateway\.umami\.is;/);
       assert.equal(response.headers.get("cross-origin-embedder-policy"), "require-corp");
       assert.equal(response.headers.get("cross-origin-opener-policy"), "same-origin");
       assert.equal(response.headers.get("cross-origin-resource-policy"), "same-origin");

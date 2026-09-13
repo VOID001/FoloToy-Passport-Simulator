@@ -35,7 +35,7 @@ const mimeTypes = {
 };
 const securityHeaders = {
   "content-security-policy":
-    "default-src 'self'; base-uri 'none'; connect-src 'self' https://cloud.umami.is; " +
+    "default-src 'self'; base-uri 'none'; connect-src 'self' https://gateway.umami.is; " +
     "img-src 'self' data:; media-src 'self'; object-src 'none'; " +
     "script-src 'self' 'wasm-unsafe-eval' https://cloud.umami.is; style-src 'self'; " +
     "worker-src 'self'",
