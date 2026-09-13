@@ -81,6 +81,10 @@ await cp(
   path.join(outputRoot, "logging.mjs"),
 );
 await cp(
+  path.join(projectRoot, "traffic-analytics.mjs"),
+  path.join(outputRoot, "traffic-analytics.mjs"),
+);
+await cp(
   path.join(projectRoot, "network-bridge.mjs"),
   path.join(outputRoot, "network-bridge.mjs"),
 );

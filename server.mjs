@@ -14,6 +14,10 @@ import {
   requestIdFrom,
 } from "./logging.mjs";
 import { attachNetworkBridge } from "./network-bridge.mjs";
+import {
+  createTrafficAnalytics,
+  trafficAnalyticsEnabled,
+} from "./traffic-analytics.mjs";
 
 const HOST = process.env.HOST || "127.0.0.1";
 const PORT = Number(process.env.PORT || 4190);
@@ -103,6 +107,19 @@ function startAccessLog(request, response, logger) {
     });
   });
   return requestId;
+}
+
+function trackPageView(request, response, trafficAnalytics) {
+  if (
+    !trafficAnalytics ||
+    request.method !== "GET" ||
+    !["/", "/index.html"].includes(requestPath(request))
+  ) {
+    return;
+  }
+  response.once("finish", () => {
+    if (response.statusCode === 200) trafficAnalytics.record(request);
+  });
 }
 
 export function localFirmwareUploadEnabled({
@@ -199,6 +216,7 @@ async function serve(request, response, {
   logger,
   requestId,
   runtimeConfig,
+  trafficAnalytics,
 }) {
   const requestUrl = new URL(request.url, `http://${request.headers.host}`);
   if (requestUrl.pathname === "/healthz") {
@@ -224,6 +242,20 @@ async function serve(request, response, {
       return;
     }
     writeJson(response, 200, runtimeConfig, request.method === "GET");
+    return;
+  }
+  if (requestUrl.pathname === "/api/traffic-stats" && trafficAnalytics) {
+    if (!["GET", "HEAD"].includes(request.method)) {
+      response.writeHead(405, { ...securityHeaders, allow: "GET, HEAD" });
+      response.end();
+      return;
+    }
+    writeJson(
+      response,
+      200,
+      trafficAnalytics.snapshot(),
+      request.method === "GET",
+    );
     return;
   }
   if (requestUrl.pathname === "/api/community-firmware") {
@@ -288,6 +320,17 @@ async function serve(request, response, {
 
 export function createAppServer(options = {}) {
   const logger = options.logger ?? defaultLogger;
+  const analyticsEnabled =
+    options.analyticsEnabled ??
+    trafficAnalyticsEnabled(options.env ?? process.env);
+  const trafficAnalytics = options.trafficAnalytics !== undefined
+    ? options.trafficAnalytics
+    : analyticsEnabled
+      ? createTrafficAnalytics({
+          logger,
+          ...options.trafficAnalyticsOptions,
+        })
+      : null;
   const runtimeConfig = Object.freeze({
     allowLocalFirmwareUpload:
       options.allowLocalFirmwareUpload ?? localFirmwareUploadEnabled(),
@@ -296,11 +339,13 @@ export function createAppServer(options = {}) {
     options.communityFirmwareFetcher ?? fetchCommunityFirmware;
   const server = http.createServer((request, response) => {
     const requestId = startAccessLog(request, response, logger);
+    trackPageView(request, response, trafficAnalytics);
     serve(request, response, {
       communityFirmwareFetcher,
       logger,
       requestId,
       runtimeConfig,
+      trafficAnalytics,
     }).catch((error) => {
       logger.error("http_request_failed", {
         request_id: requestId,
