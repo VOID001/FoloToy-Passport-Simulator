@@ -1,7 +1,7 @@
 FROM node:22-alpine AS build
 
 WORKDIR /src
-COPY package.json server.mjs community-import.mjs logging.mjs traffic-analytics.mjs network-bridge.mjs network-packets.mjs README.md DEPLOYMENT.md ./
+COPY package.json server.mjs community-import.mjs logging.mjs network-bridge.mjs network-packets.mjs README.md DEPLOYMENT.md ./
 COPY public ./public
 COPY tools/build-site.mjs tools/verify-board-runtime.mjs tools/verify-site.mjs ./tools/
 RUN npm run build && node tools/verify-site.mjs

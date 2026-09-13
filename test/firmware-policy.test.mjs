@@ -46,6 +46,7 @@ test("runtime config exposes the server-selected firmware policy", async (t) => 
   assert.equal(response.headers.get("cache-control"), "no-store");
   assert.deepEqual(await response.json(), {
     allowLocalFirmwareUpload: false,
+    analytics: null,
   });
 });
 

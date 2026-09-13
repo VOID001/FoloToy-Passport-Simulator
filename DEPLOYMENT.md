@@ -80,7 +80,8 @@ change before remote embedding can work.
 | `HOST` | `127.0.0.1` | `0.0.0.0` | Address on which the HTTP server listens. |
 | `PORT` | `4190` | Platform-provided value | HTTP and WebSocket port. Railway supplies this automatically. |
 | `EMULATOR_ALLOW_LOCAL_FIRMWARE_UPLOAD` | Disabled | `0` | Set to `1` only when users should be able to select arbitrary local `.bin` files. |
-| `EMULATOR_TRAFFIC_ANALYTICS` | Disabled | `1` when needed | Set to `1` to count successful page views and daily unique visitors. |
+| `EMULATOR_TRAFFIC_ANALYTICS` | Disabled | `1` when needed | Set to `1` to load the Umami Cloud analytics tracker. |
+| `UMAMI_WEBSITE_ID` | None | Umami website UUID | Website ID copied from the Umami tracking code. Required when analytics is enabled. |
 | `EMULATOR_NETWORK_ALLOW_PRIVATE` | Disabled | `0` | Set to `1` only in a trusted environment to allow emulated firmware to reach private, loopback, and reserved addresses. |
 | `EMULATOR_NETWORK_MAX_SESSIONS` | `16` | Tune for the instance size | Maximum concurrent emulator WebSocket sessions. Valid range: 1-256. |
 | `EMULATOR_NETWORK_HEARTBEAT_MS` | `30000` | `30000` | WebSocket and application heartbeat interval in milliseconds. Valid range: 1000-600000; an unanswered application heartbeat is terminated at the next interval. |
@@ -97,6 +98,7 @@ Recommended Railway variables:
 HOST=0.0.0.0
 EMULATOR_ALLOW_LOCAL_FIRMWARE_UPLOAD=0
 EMULATOR_TRAFFIC_ANALYTICS=1
+UMAMI_WEBSITE_ID=123e4567-e89b-42d3-a456-426614174000
 EMULATOR_NETWORK_ALLOW_PRIVATE=0
 EMULATOR_NETWORK_MAX_SESSIONS=16
 EMULATOR_NETWORK_HEARTBEAT_MS=30000
@@ -105,12 +107,12 @@ EMULATOR_NETWORK_HEARTBEAT_MS=30000
 Do not set `PORT` on Railway unless the platform configuration specifically
 requires it. Railway injects `PORT` for the service.
 
-When traffic analytics is enabled, successful `GET /` and `GET /index.html`
-requests count as page views. Unique visitors are deduplicated per UTC day
-using an in-memory hash of the client address and user agent. Current counts
-are available from `GET /api/traffic-stats`, and every page view emits a
-`traffic_analytics` structured log record. Counts reset when the service
-process restarts and are maintained independently by each service replica.
+When traffic analytics is enabled and `UMAMI_WEBSITE_ID` contains a valid
+website UUID, the browser loads the Umami Cloud tracker from
+`https://cloud.umami.is/script.js`. Umami stores and reports page views and
+unique visitors; no analytics data is retained by the emulator service. View
+the results in the Umami dashboard. The tracker remains disabled when either
+setting is missing or invalid.
 
 `EMULATOR_ALLOW_LOCAL_FIRMWARE_UPLOAD` controls the product UI and local file
 handling path. It is not authentication for `/api/emulator-network`. Keep the

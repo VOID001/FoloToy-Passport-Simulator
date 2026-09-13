@@ -30,7 +30,6 @@ for (const required of [
   "server.mjs",
   "community-import.mjs",
   "logging.mjs",
-  "traffic-analytics.mjs",
   "package.json",
   "release-manifest.json",
   "public/index.html",
