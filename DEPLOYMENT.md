@@ -109,9 +109,10 @@ requires it. Railway injects `PORT` for the service.
 
 When traffic analytics is enabled and `UMAMI_WEBSITE_ID` contains a valid
 website UUID, the browser loads the Umami Cloud tracker from
-`https://cloud.umami.is/script.js`. Umami stores and reports page views and
-unique visitors; no analytics data is retained by the emulator service. View
-the results in the Umami dashboard. The tracker remains disabled when either
+`https://cloud.umami.is/script.js` and sends analytics to
+`https://gateway.umami.is`. Umami stores and reports page views and unique
+visitors; no analytics data is retained by the emulator service. View the
+results in the Umami dashboard. The tracker remains disabled when either
 setting is missing or invalid.
 
 `EMULATOR_ALLOW_LOCAL_FIRMWARE_UPLOAD` controls the product UI and local file
