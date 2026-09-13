@@ -16,6 +16,7 @@ import {
 } from "./inspector.js";
 import { copyCanvasPngToClipboard } from "./screen-capture.js";
 import { showSimulatorNoticeOnce } from "./simulator-notice.js";
+import { loadAnalytics } from "./analytics.js";
 
 const DOUBLE_CLICK_WINDOW_MS = 300;
 const LONG_PRESS_MS = 300;
@@ -818,6 +819,7 @@ async function configureFirmwareSources() {
     if (!response.ok) throw new Error(`运行配置请求失败: ${response.status}`);
     const config = await response.json();
     allowLocalFirmwareUpload = config.allowLocalFirmwareUpload === true;
+    loadAnalytics(config.analytics);
   } catch (error) {
     allowLocalFirmwareUpload = false;
     log(`本地固件入口保持关闭：${error.message}`);

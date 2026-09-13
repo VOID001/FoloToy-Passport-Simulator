@@ -21,6 +21,8 @@ const directory = path.dirname(fileURLToPath(import.meta.url));
 const publicRoot = path.join(directory, "public");
 const MAX_REQUEST_BYTES = 8 * 1024;
 const LOCAL_FIRMWARE_UPLOAD_ENV = "EMULATOR_ALLOW_LOCAL_FIRMWARE_UPLOAD";
+const UMAMI_WEBSITE_ID_PATTERN =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 const mimeTypes = {
   ".css": "text/css; charset=utf-8",
@@ -33,8 +35,9 @@ const mimeTypes = {
 };
 const securityHeaders = {
   "content-security-policy":
-    "default-src 'self'; base-uri 'none'; connect-src 'self'; img-src 'self' data:; " +
-    "media-src 'self'; object-src 'none'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self'; " +
+    "default-src 'self'; base-uri 'none'; connect-src 'self' https://cloud.umami.is; " +
+    "img-src 'self' data:; media-src 'self'; object-src 'none'; " +
+    "script-src 'self' 'wasm-unsafe-eval' https://cloud.umami.is; style-src 'self'; " +
     "worker-src 'self'",
   "cross-origin-embedder-policy": "require-corp",
   "cross-origin-opener-policy": "same-origin",
@@ -113,6 +116,20 @@ export function localFirmwareUploadEnabled({
     return env[LOCAL_FIRMWARE_UPLOAD_ENV] === "1";
   }
   return argv.includes("--allow-local-firmware-upload");
+}
+
+export function umamiAnalyticsConfig(env = process.env) {
+  const websiteId = env.UMAMI_WEBSITE_ID?.trim();
+  if (
+    env.EMULATOR_TRAFFIC_ANALYTICS !== "1" ||
+    !UMAMI_WEBSITE_ID_PATTERN.test(websiteId || "")
+  ) {
+    return null;
+  }
+  return Object.freeze({
+    provider: "umami",
+    websiteId,
+  });
 }
 
 async function readJsonRequest(request) {
@@ -291,6 +308,8 @@ export function createAppServer(options = {}) {
   const runtimeConfig = Object.freeze({
     allowLocalFirmwareUpload:
       options.allowLocalFirmwareUpload ?? localFirmwareUploadEnabled(),
+    analytics:
+      options.analytics ?? umamiAnalyticsConfig(options.env ?? process.env),
   });
   const communityFirmwareFetcher =
     options.communityFirmwareFetcher ?? fetchCommunityFirmware;
