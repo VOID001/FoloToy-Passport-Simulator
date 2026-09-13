@@ -1,5 +1,6 @@
 .build/
 .dbg/
+.trae/
 dist/
 artifacts/
 /*.bin
