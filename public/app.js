@@ -1,6 +1,7 @@
 import { supportsVirtualProvisioning, provisionXiaozhi } from "./provisioning.js";
 import { FirmwareOperationGate } from "./firmware-operation.js";
 import { QemuRuntime } from "./runtime.js";
+import { SimulatorSerial } from "./serial-api.js";
 import { BrowserAudio } from "./audio.js";
 import {
   formatFirmwareSize,
@@ -28,6 +29,11 @@ import { loadAnalytics } from "./analytics.js";
 
 
 const runtime = new QemuRuntime();
+Object.defineProperty(window, "aiPassportSimulator", {
+  value: Object.freeze({ version: 1, serial: new SimulatorSerial(runtime) }),
+  writable: false,
+  configurable: false,
+});
 const audio = new BrowserAudio((samples, sampleRate) => runtime.sendMicrophone(samples, sampleRate));
 const display = document.querySelector("#qemu-display");
 const context = display.getContext("2d", { alpha: false });

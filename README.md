@@ -54,6 +54,46 @@ http://127.0.0.1:4190/?id=2
 声音需要先点击页面上的“声音”。麦克风需要单独授权，并且只能在
 `localhost` 或 HTTPS 页面使用。
 
+## 脚本串口调试（AT 指令）
+
+不必打开 UART 检查器或模拟鼠标点击。页面运行后，同源开发脚本可以调用：
+
+```js
+const serial = window.aiPassportSimulator.serial;
+const reply = await serial.command("AT+NET?", {
+  match: "CAMPUS_NET", // 换成当前固件实际的返回标记
+  timeoutMs: 3000,
+});
+console.log(reply.text);
+await serial.command("ok"); // 发送一行，默认以 CR 结束
+serial.write(new Uint8Array([65, 84, 13])); // 原始字节，不附加结束符
+const cursor = serial.cursor;
+await serial.waitFor(/OK\r?\n/, { since: cursor, timeoutMs: 3000 });
+const output = serial.read({ since: cursor });
+```
+
+`command` 仅发送固件串口内容，不解析或执行 JavaScript。支持 `terminator`（`\r`、`\n`、`\r\n` 或空串）；不指定 `match` 时只确认已交给运行时，**不代表固件已处理**。指定 `match` 后必须收到匹配输出，否则超时报错；同一时刻只允许一条等待回包的 `command`。也可传入 `AbortSignal`。`read` 返回原始文本与字符游标；默认保留最近250,000个字符，过期游标报错。清空、重载、运行失败和销毁都会取消等待。
+
+接口复用现有 `uart-input`/`uart` 通道；当前 WASM 将输入送往 UART0 和 USB Serial/JTAG，两者不能单独选择。读取仅覆盖运行时实际提供的输出：固件是否实现指令、所用控制台是否有回包，都必须验证。运行状态不等于应用完成开机，可先等固件的就绪标记。接口不自动回显输入、不开放HTTP串口端点，也不从URL执行指令。不要把密码或机器人地址放进公开脚本、日志或源码。
+
+### Node 命令行（无需浏览器）
+
+创建UTF-8的 `steps.json`：
+
+```json
+[
+  {"command": "AT+NET?", "match": "CAMPUS_NET", "timeoutMs": 3000},
+  {"command": "ok", "settleMs": 500, "screenshot": "home.png"}
+]
+```
+
+```bash
+node tools/serial-debug.mjs --firmware /path/to/full.bin \
+  --commands-file steps.json --boot-ms 5000 --output-dir serial-output
+```
+
+每次启动独立的离线虚拟设备，使用现有QEMU、WASM和外设模型；不打开实体USB、不控制已打开的浏览器，也不建立网络桥接。指令不回显；输出按步骤返回JSON。`matched: null` 只表示发送步骤；带 `match` 的步骤缺少预期返回时以非零状态退出。`boot-ms`、`settleMs`、`timeoutMs` 在命令行中均为**虚拟毫秒**，浏览器API超时为实际毫秒。截图是240×320原始PNG，仅接受文件名，写入指定目录。网络、BLE等模拟限制仍然适用；配网和无线联调使用浏览器桥接或实机。
+
 ## 屏幕录制
 
 固件运行后，点击设备右上角的“录屏”开始录制，按钮会显示已录制时长。
